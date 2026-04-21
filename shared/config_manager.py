@@ -1,3 +1,5 @@
+#Script doing all possible manupulation with configuration files, such as loading, saving and getting effective limits for users
+
 from pathlib import Path
 import shared.defaults as defaults
 import tomllib
