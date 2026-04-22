@@ -1,21 +1,18 @@
 import shared.config_manager as config_manager
-from datetime import date
+import shared.usage_manager as usage_manager
+import datetime
+import json
+import subprocess
+import win32ts
 
-print(f"Config path: {config_manager.get_config_path()}")
 
-print(f"Values in configuration file are: {config_manager.load_config()}")
 
-print(f"Effective limits for user 'andy' for 2026, 4, 20: {config_manager.get_effective_limits('andy', date(2026, 4, 20))}")
+def enumerate_active_user():
+    sessions = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
+    active_sessions = [win32ts.WTSQuerySessionInformation(win32ts.WTS_CURRENT_SERVER_HANDLE,session['SessionId'],win32ts.WTSUserName) for session in sessions if session['State'] == 0]
+    return active_sessions
 
-print(date.today().isoformat())
+sessions = enumerate_active_user()
+print(sessions)
 
-car = {
-  "brand": "Ford",
-  "model": "Mustang",
-  "year": 1964,
-  "color": "Yellow"
-}
-
-car.update({"color": "White"})
-
-print(car)
+print(datetime.datetime.now().strftime("%H:%M"))

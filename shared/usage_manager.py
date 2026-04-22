@@ -27,7 +27,9 @@ def load_timeline_data():
             return {}
     else:
         return {}
-#Function to write data to timeline file, data should be in format of minutes spent by user today, it will be stored in timeline file with current date as key. If there is already data for this user and date, it will be updated with new value.
+#Function to write data to timeline file, data should be in format of minutes spent by user today,
+# it will be stored in timeline file with current date as key. If there is already data for this user
+#  and date, it will be updated with new value.
 def write_timeline_data(user, data):
     data_to_write = load_timeline_data()
     if data_to_write:
