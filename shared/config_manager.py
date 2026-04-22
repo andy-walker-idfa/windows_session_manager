@@ -5,6 +5,8 @@ import shared.defaults as defaults
 import tomllib
 import tomli_w
 from datetime import date
+import logging
+
 
 #Function to get the path of configuration limits file, if config folder does not exist it will be created
 def get_config_path():
@@ -12,7 +14,7 @@ def get_config_path():
     try:
         Path.mkdir(root_folder / "config", exist_ok=True)
     except PermissionError:
-        print("Permission denied: Could not create 'config' directory. Please run the program with appropriate permissions.")
+        logging.error("Permission denied: Could not create 'config' directory. Please run the program with appropriate permissions.")
         exit(1)
     
     return root_folder / "config" / defaults.limits_config_file
@@ -25,7 +27,7 @@ def load_config():
             with open(config_file_path, "rb") as f:
                 return tomllib.load(f)
         except Exception as e:
-            print(f"Error loading config file: {e}")
+            logging.error(f"Error loading config file: {e}")
             return {}
     else:
         return {}
@@ -38,7 +40,7 @@ def save_config(config: dict):
             tomli_w.dump(config, f)
         return True
     except Exception as e:
-        print(f"Error saving config file: {e}")
+        logging.error(f"Error saving config file: {e}")
         return False
 
 #Function to get user specific config values from configuration limits file

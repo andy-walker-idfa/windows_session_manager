@@ -3,6 +3,7 @@ from pathlib import Path
 import shared.defaults as defaults
 import json
 from datetime import date
+import logging
 
 #Function to get the path of timeline file, if data folder does not exist it will be created
 def get_timeline_path():
@@ -10,7 +11,7 @@ def get_timeline_path():
     try:
         Path.mkdir(root_folder / "data", exist_ok=True)
     except PermissionError:
-        print("Permission denied: Could not create 'data' directory. Please run the program with appropriate permissions.")
+        logging.error("Permission denied: Could not create 'data' directory. Please run the program with appropriate permissions.")
         exit(1)
     
     return root_folder / "data" / defaults.time_tracking_file
@@ -23,7 +24,7 @@ def load_timeline_data():
             with open(timeline_file_path, "r") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"Error loading timeline file: {e}")
+            logging.error(f"Error loading timeline file: {e}")
             return {}
     else:
         return {}
@@ -44,7 +45,7 @@ def write_timeline_data(user, data):
             json.dump(data_to_write, f)
         return True
     except Exception as e:
-        print(f"Error writing to timeline file: {e}")
+        logging.error(f"Error writing to timeline file: {e}")
         return False
 
 #Function returning time spent by user today. As it is written in timeline file, it is expected to be in minutes, but it can be None if user has not spent any time today or if there is no data for this user.
