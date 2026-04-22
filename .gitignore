@@ -15,3 +15,5 @@ __pycache__/
 #Config and personal files
 config/
 data/
+
+test_config.py
