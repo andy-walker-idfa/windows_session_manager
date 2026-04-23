@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 
+#Application Name
+app_name = "Time Manager"
 #File name where configuration limits are stored
 limits_config_file = "limits.toml"
 #Configuration limits we are working with
