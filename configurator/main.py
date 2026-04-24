@@ -8,9 +8,7 @@ def main():
     app.mainloop()
 
     selected_users = app.selected_values
-    for user in selected_users:
-        print(user)
 
     #Presenting second window where user can manage limits for selected users, currently it only shows default limits, in the future it will show effective limits for each selected user and allow to edit them
-    app = SecondWindow(app_name=defaults.app_name, window_title="Configure limits for selected users", tab_values=[{"Name": "Defaults"}, {"Name": "User Settings"}])
+    app = SecondWindow(selected_users=selected_users, app_name=defaults.app_name, window_title="Configure limits for selected users", tab_values=[{"Name": "Defaults"}, {"Name": "User Settings"}])
     app.mainloop()
