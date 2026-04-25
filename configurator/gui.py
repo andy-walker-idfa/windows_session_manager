@@ -25,7 +25,7 @@ class FirstWindow(customtkinter.CTk):
         self.title(app_title)
         self.button_title = button_title
         self.window_title = window_title
-        self.geometry("400x600")
+        self.geometry("450x600")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
@@ -104,6 +104,11 @@ class LimitsFrame4SecondWindow(customtkinter.CTkFrame):
             self.entry.append(entry)
             self.lables.append(label)
     
+    def get_limits(self):
+        limits = {}
+        for label, entry in zip(self.lables, self.entry):
+            limits[label.cget("text")] = entry.get()
+        return limits
 
 class TabLabel4SecondWindow(customtkinter.CTkLabel):
     def __init__(self, master, text):
@@ -151,6 +156,20 @@ class UserSettingsFrame4SecondWindow(customtkinter.CTkFrame):
             self.day_overrides_frame.grid_remove()
             self.per_day_overrides_frame.grid(row=5, column=0, padx=0, pady=20, sticky="nsew")
 
+    def get_user_limits(self):
+        selected_option = self.selected_radiobutton.get()
+        limits = {}
+        if selected_option == "Inherit defaults only":
+            limits["Configuration level"] = "Inherit defaults only"
+        elif selected_option == "Custom weekday / weekend":
+            limits["Configuration level"] = "Custom weekday / weekend"
+            limits["Weekday"] = self.inherit_defaults_frame1.get_limits()
+            limits["Weekend"] = self.inherit_defaults_frame2.get_limits()
+            limits["Day overrides"] = self.day_overrides_frame.limits4day.get_limits() if self.day_overrides_frame.button_selected else None
+        elif selected_option == "Per-day overrides":
+            limits["Configuration level"] = "Per-day overrides"
+            limits["Per-day overrides"] = self.per_day_overrides_frame.get_limits()
+        return limits
 
 class RadioButton4SecondWindow(customtkinter.CTkRadioButton):
     def __init__(self, master, text, on_radiobutton_selected, variable, value):
@@ -163,20 +182,30 @@ class DayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
         self.label.grid(row=0, column=0, padx=0, pady=(0, 0), sticky="wn", columnspan =7)
         self.button_selected = None
         self.buttons = {}
-        self.limits4day = LimitsFrame4SecondWindow(self, None, [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}], padx=0)
-        for day in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+        days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+        self.day_frames = {}
+        for day in days:
+            self.day_frames[day] = customtkinter.CTkFrame(self)
+            self.day_frames[day].limits = LimitsFrame4SecondWindow(self.day_frames[day], day.capitalize(), [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}], padx=0) 
+            self.day_frames[day].limits.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
             button = customtkinter.CTkButton(self, text=day, width=45, height=28, command=lambda d=day: self.DayButtonCallback(d))
-            button.grid(row=1, column=["mon", "tue", "wed", "thu", "fri", "sat", "sun"].index(day), padx=0, pady=1, sticky="w")
+            button.grid(row=1, column=days.index(day), padx=0, pady=1, sticky="w")
             self.buttons[day] = button
-
+            
     def DayButtonCallback(self, day):
         self.button_selected = day
-        self.limits4day.grid(row=2, column=0, padx=0, pady=20, sticky="nsew", columnspan=7)
-        for button in self.buttons.values():
-            if button.cget("text") == day:
+        # Highlight buttons
+        for d, button in self.buttons.items():
+            if d == day:
                 button.configure(fg_color=button.cget("hover_color"))
             else:
                 button.configure(fg_color="grey")
+        # Show/hide day frames
+        for d, frame in self.day_frames.items():
+            if d == day:
+                frame.grid(row=2, column=0, padx=0, pady=0, sticky="nsew", columnspan=7)
+            else:
+                frame.grid_remove()
 
 class PerDayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
     def __init__(self, master, frame_title=None):
@@ -202,3 +231,11 @@ class PerDayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
             self.entry[day]["Earliest login"].grid(row=days.index(day)+1, column=2, padx=0, pady=0, sticky="wn")
             self.entry[day]["Latest login"] = customtkinter.CTkEntry(self)
             self.entry[day]["Latest login"].grid(row=days.index(day)+1, column=3, padx=0, pady=0, sticky="wn")
+    
+    def get_limits(self):
+        limits = {}
+        for day, entries in self.entry.items():
+            limits[day] = {}
+            for limit_name, entry in entries.items():
+                limits[day][limit_name] = entry.get()
+        return limits
