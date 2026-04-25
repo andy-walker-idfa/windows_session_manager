@@ -66,8 +66,11 @@ class SecondWindow(customtkinter.CTk):
 
         TabLabel4SecondWindow(defaults_scroll, "These values apply to all managed users unless overridden in user settings.").grid(row=0, \
             column=0, padx=20, pady=(20, 0), sticky="wn")
-        LimitsFrame4SecondWindow(defaults_scroll, "Weekday", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]).grid(row=1, column=0, padx=0, pady=20, sticky="nsew")
-        LimitsFrame4SecondWindow(defaults_scroll, "Weekend", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]).grid(row=2, column=0, padx=0, pady=20, sticky="nsew")
+        self.defaults_frames = []
+        self.defaults_frames.append(LimitsFrame4SecondWindow(defaults_scroll, "Weekday", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]))
+        self.defaults_frames[0].grid(row=1, column=0, padx=0, pady=20, sticky="nsew")
+        self.defaults_frames.append(LimitsFrame4SecondWindow(defaults_scroll, "Weekend", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]))
+        self.defaults_frames[1].grid(row=2, column=0, padx=0, pady=20, sticky="nsew")
 
         #Configuring User Settings tab
         user_settings_tab = self.tab_view.tab("User Settings")
@@ -77,11 +80,43 @@ class SecondWindow(customtkinter.CTk):
         user_settings_scroll.grid(row=0, column=0, sticky="nsew")
         user_settings_scroll.grid_columnconfigure(0, weight=1)
 
+        self.user_frames = []
         for user in selected_users:
             config_settings = [{"Name": "Inherit defaults only"}, {"Name": "Custom weekday / weekend"}, {"Name": "Per-day overrides"}]
-            UserSettingsFrame4SecondWindow(user_settings_scroll, user["Name"], config_settings).grid(row=selected_users.index(user), column=0, padx=0, pady=20, sticky="nsew")
-            
+            user_frame = UserSettingsFrame4SecondWindow(user_settings_scroll, user["Name"], config_settings)
+            user_frame.grid(row=selected_users.index(user), column=0, padx=0, pady=20, sticky="nsew")
+            self.user_frames.append(user_frame)
         
+        #Placing buttons for saving/canceling changes
+        self.button_frame = customtkinter.CTkFrame(self)
+        self.button_frame.grid(row=2, column=0, padx=20, pady=20)
+        self.button_frame.grid_columnconfigure(0)
+        self.button_frame.grid_columnconfigure(1)
+        self.save_button = customtkinter.CTkButton(self.button_frame, text="Save", command=self.save_changes, width=100)
+        self.save_button.grid(row=0, column=0, padx=10, pady=0)
+        self.cancel_button = customtkinter.CTkButton(self.button_frame, text="Cancel", command=self.cancel, width=100)
+        self.cancel_button.grid(row=0, column=1, padx=10, pady=0)
+
+            
+    def save_changes(self):
+        #In the future this function will save changes to database or configuration file, currently it just prints them to console
+        defaults = {}
+        for frame in self.defaults_frames:
+            limits = frame.get_limits()
+            defaults[frame.label.cget("text")] = limits
+        print("Defaults:")
+        print(defaults)
+
+        users = {}
+        for user_frame in self.user_frames:
+            user_limits = user_frame.get_user_limits()
+            users[user_frame.label1.cget("text")] = user_limits
+        print("Users:")
+        print(users)
+    
+    def cancel(self):
+        self.destroy()
+
 
 class TabView4SecondWindow(customtkinter.CTkTabview):
     def __init__(self, master, values):
