@@ -619,3 +619,22 @@
 2026-04-27 14:45:42,576 - DEBUG - Checking user andy with session ID 5
 2026-04-27 14:50:42,567 - DEBUG - Checking user andy with session ID 5
 2026-04-27 14:55:42,577 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:00:42,565 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:05:42,582 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:10:42,575 - DEBUG - Checking user luka_luka with session ID 6
+2026-04-27 15:10:42,604 - INFO - User luka_luka has been logged out due to time spent restrictions.
+2026-04-27 15:15:42,566 - DEBUG - Checking user luka_luka with session ID 8
+2026-04-27 15:15:42,576 - INFO - User luka_luka has been logged out due to time spent restrictions.
+2026-04-27 15:20:42,583 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:25:42,571 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:30:42,578 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:35:42,555 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:35:43,572 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:40:42,547 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:40:43,568 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:45:42,805 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:50:42,538 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:50:43,553 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:55:42,557 - DEBUG - Checking user andy with session ID 5
+2026-04-27 15:55:43,570 - DEBUG - Checking user andy with session ID 5
+2026-04-27 16:00:42,558 - DEBUG - Checking user andy with session ID 5
