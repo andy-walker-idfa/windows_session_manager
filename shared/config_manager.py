@@ -6,6 +6,7 @@ import tomllib
 import tomli_w
 from datetime import date
 import logging
+import re
 
 
 #Function to get the path of configuration limits file, if config folder does not exist it will be created
@@ -77,8 +78,68 @@ def get_effective_limits(user_name, target_day=None):
             for key in defaults.limits_keys:
                 effective_limits.update({key: user_config_of_this_day_type.get(key, effective_limits.get(key, None))})
 
-        user_config_of_today = user_config.get(week_day, {})
+        user_config_of_today = user_config.get("day_overrides", {}).get(week_day, {})
         if user_config_of_today:
             for key in defaults.limits_keys:
                 effective_limits.update({key: user_config_of_today.get(key, effective_limits.get(key, None))})
     return effective_limits
+
+#Function to validate limits values
+def validate_limits(limits):
+    for key in limits.keys():
+        if limits[key] == "":
+            continue
+        if "minutes" in key:
+            try:
+                new_value = int(limits[key])
+                if new_value < 0 or new_value > 1440:
+                    return False
+            except (ValueError, TypeError):
+                return False
+        elif "login" in key:
+            try:
+                regex = "^([0-1][0-9]|2[0-3]):[0-5][0-9]$"
+                p = re.compile(regex)
+                if(not re.search(p, limits[key])):
+                    return False
+            except re.error:
+                return False
+    return True
+
+#Function to transform limits names used in GUI to limits names used in limits file
+def transform_limits(gui_limits):
+    field_map = {
+        "Max minutes": "limit_minutes",
+        "Earliest login": "earliest_login",
+        "Latest login": "latest_login",
+        "Weekday": "weekday",
+        "Weekend": "weekend",
+        "Day overrides": "day_overrides"
+    }
+    new_limits = {}
+    for key, value in gui_limits.items():
+        if value == "":
+            continue
+        new_key = field_map.get(key,key)
+        new_limits[new_key] = gui_limits[key]
+        if new_key == "limit_minutes":
+            new_limits.update({"limit_minutes": int(new_limits["limit_minutes"])})
+    return new_limits
+
+def build_config(default_data, user_data):
+    def update_dict(item:  dict):
+        new_item = item
+        for key in item.keys():
+            if type(item[key]) is dict:
+                new_value = update_dict(item[key])
+                new_item.update({key: new_value})
+        new_item = transform_limits(item)
+        return new_item
+    target_data = {}
+    target_data["defaults"] = default_data
+    target_data["users"] = user_data
+    for key in target_data.keys():
+        if type(target_data[key]) == dict:
+            new_value = update_dict(target_data[key])
+            target_data.update({key: new_value})
+    return target_data
