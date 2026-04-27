@@ -10,7 +10,7 @@ class CheckboxFrame4FirstWindow(customtkinter.CTkScrollableFrame):
         self.checkboxes = []
         for i, value in enumerate(values):
             var = customtkinter.BooleanVar(value=False)
-            self.checkbox = customtkinter.CTkCheckBox(self, text=f"User: {values[i]['Name']}; Enabled: {values[i]['Enabled']}", variable=var)
+            self.checkbox = customtkinter.CTkCheckBox(self, text=f"User: {values[i]['Name']};    Enabled: {values[i]['Enabled']}", variable=var)
             self.checkbox.grid(row=i, column=0, padx=20, pady=10, sticky="w")
             self.checkboxes.append((value, var))
     
