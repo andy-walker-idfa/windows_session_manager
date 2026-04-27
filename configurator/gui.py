@@ -1,4 +1,6 @@
 import customtkinter
+import shared.config_manager
+from tkinter import messagebox
 
 class CheckboxFrame4FirstWindow(customtkinter.CTkScrollableFrame):
     def __init__(self, master, values: list[dict]):
@@ -104,15 +106,18 @@ class SecondWindow(customtkinter.CTk):
         for frame in self.defaults_frames:
             limits = frame.get_limits()
             defaults[frame.label.cget("text")] = limits
-        print("Defaults:")
-        print(defaults)
+        if "Error" in defaults.values():
+            return
 
         users = {}
         for user_frame in self.user_frames:
             user_limits = user_frame.get_user_limits()
             users[user_frame.label1.cget("text")] = user_limits
-        print("Users:")
-        print(users)
+        if "Error" in users.values():
+            return
+        data2save = shared.config_manager.build_config(defaults,users)
+        shared.config_manager.save_config(data2save)
+        self.destroy()
     
     def cancel(self):
         self.destroy()
@@ -143,6 +148,9 @@ class LimitsFrame4SecondWindow(customtkinter.CTkFrame):
         limits = {}
         for label, entry in zip(self.lables, self.entry):
             limits[label.cget("text")] = entry.get()
+        if not shared.config_manager.validate_limits(limits):
+            messagebox.showerror("Validation Error", f"Invalid values in {self.label.cget('text')} section. Minutes must be 0-1440, times must be HH:MM format")
+            return "Error"
         return limits
 
 class TabLabel4SecondWindow(customtkinter.CTkLabel):
@@ -200,10 +208,17 @@ class UserSettingsFrame4SecondWindow(customtkinter.CTkFrame):
             limits["Configuration level"] = "Custom weekday / weekend"
             limits["Weekday"] = self.inherit_defaults_frame1.get_limits()
             limits["Weekend"] = self.inherit_defaults_frame2.get_limits()
-            limits["Day overrides"] = self.day_overrides_frame.limits4day.get_limits() if self.day_overrides_frame.button_selected else None
+            day_overrides = {}
+            for day, frame in self.day_overrides_frame.day_frames.items():
+                day_limits = frame.limits.get_limits()
+                if any(value != "" for value in day_limits.values()):
+                    day_overrides[day] = day_limits
+            limits["Day overrides"] = day_overrides if day_overrides else None
         elif selected_option == "Per-day overrides":
             limits["Configuration level"] = "Per-day overrides"
             limits["Per-day overrides"] = self.per_day_overrides_frame.get_limits()
+        if "Error" in limits.values():
+            return "Error"
         return limits
 
 class RadioButton4SecondWindow(customtkinter.CTkRadioButton):
@@ -270,7 +285,12 @@ class PerDayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
     def get_limits(self):
         limits = {}
         for day, entries in self.entry.items():
-            limits[day] = {}
+            day_limits = {}
             for limit_name, entry in entries.items():
-                limits[day][limit_name] = entry.get()
+                day_limits[limit_name] = entry.get()
+            if any(value != "" for value in day_limits.values()):
+                if not shared.config_manager.validate_limits(day_limits):
+                    messagebox.showerror("Validation Error", f"Invalid values in {day} section. Minutes must be 0-1440, times must be HH:MM format")
+                    return "Error"
+            limits[day] = day_limits
         return limits
