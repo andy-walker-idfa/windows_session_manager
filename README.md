@@ -185,11 +185,35 @@ To deploy on computers without Python installed, bundle the project into standal
 
 ```bash
 pip install pyinstaller
-pyinstaller --onefile --noconsole run_tracker.py
-pyinstaller --onefile --noconsole run_configurator.py
+pyinstaller --onedir --noconsole --distpath dist/ScreenTime --name tracker run_tracker.py
+pyinstaller --onedir --noconsole --distpath dist/ScreenTime --name configurator run_configurator.py
 ```
+Copy the entire dist/ScreenTime/ folder to the target computer — for example to C:\ScreenTime\
 
-Copy the resulting .exe files from the dist/ folder to the target machine. The config/ and data/ folders will be created automatically on first run.
+Then on the target computer:
+
+Double-click configurator.exe to configure limits and save
+Create the scheduled task pointing to tracker.exe:
+
+powershell$action = New-ScheduledTaskAction -Execute "C:\ScreenTime\tracker.exe"
+
+$trigger = New-ScheduledTaskTrigger -AtStartup
+$trigger.Repetition = (New-ScheduledTaskTrigger -Once -At "00:00" `
+    -RepetitionInterval (New-TimeSpan -Minutes 5)).Repetition
+
+$settings = New-ScheduledTaskSettingsSet `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries `
+    -StartWhenAvailable
+
+$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
+
+Register-ScheduledTask `
+    -TaskName "ScreenTimeTracker" `
+    -Action $action `
+    -Trigger $trigger `
+    -Settings $settings `
+    -Principal $principal
 
 ## Limitations and future improvements
 

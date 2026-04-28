@@ -7,7 +7,7 @@ import logging
 
 #Function to get the path of timeline file, if data folder does not exist it will be created
 def get_timeline_path():
-    root_folder = Path(__file__).resolve().parent.parent
+    root_folder = defaults.get_project_root()
     try:
         Path.mkdir(root_folder / "data", exist_ok=True)
     except PermissionError:
