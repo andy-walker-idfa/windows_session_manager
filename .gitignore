@@ -16,5 +16,8 @@ __pycache__/
 config/
 data/
 
+#Test files and folders created by PyInstall during packaging
 test_config.py
 dist/
+build/
+*.spec
