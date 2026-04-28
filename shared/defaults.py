@@ -29,6 +29,6 @@ def configure_logging():
 #Function to determine root folder. Depends how we execute it. Either directly py file or via PyInstaller from executable file
 def get_project_root():
     if hasattr(sys,'_MEIPASS'):
-        return Path(sys.executable).resolve().parent
+        return Path(sys.executable).resolve().parent.parent
     else:
         return Path(__file__).resolve().parent.parent
