@@ -213,7 +213,7 @@ class UserSettingsFrame4SecondWindow(customtkinter.CTkFrame):
                 day_limits = frame.limits.get_limits()
                 if any(value != "" for value in day_limits.values()):
                     day_overrides[day] = day_limits
-            limits["Day overrides"] = day_overrides if day_overrides else None
+            limits["Day overrides"] = day_overrides
         elif selected_option == "Per-day overrides":
             limits["Configuration level"] = "Per-day overrides"
             limits["Per-day overrides"] = self.per_day_overrides_frame.get_limits()

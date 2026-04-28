@@ -20,7 +20,7 @@ log_level = "DEBUG"
 def configure_logging():
     logging.basicConfig(
         level=log_level,
-        format="%(asctime)s - %(levelname)s - %(message)s",
+        format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
         handlers=[
             logging.FileHandler(get_project_root() / log_name),
             logging.StreamHandler()
