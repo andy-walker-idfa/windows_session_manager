@@ -17,3 +17,4 @@ config/
 data/
 
 test_config.py
+dist/

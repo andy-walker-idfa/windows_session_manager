@@ -11,7 +11,7 @@ import re
 
 #Function to get the path of configuration limits file, if config folder does not exist it will be created
 def get_config_path():
-    root_folder = Path(__file__).resolve().parent.parent
+    root_folder = defaults.get_project_root()
     try:
         Path.mkdir(root_folder / "config", exist_ok=True)
     except PermissionError:

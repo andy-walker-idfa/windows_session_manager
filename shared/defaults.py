@@ -1,5 +1,6 @@
 import logging
 from pathlib import Path
+import sys
 
 #Application Name
 app_name = "Time Manager"
@@ -21,7 +22,13 @@ def configure_logging():
         level=log_level,
         format="%(asctime)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler(Path(__file__).resolve().parent.parent / log_name),
+            logging.FileHandler(get_project_root() / log_name),
             logging.StreamHandler()
         ]
     )
+#Function to determine root folder. Depends how we execute it. Either directly py file or via PyInstaller from executable file
+def get_project_root():
+    if hasattr(sys,'_MEIPASS'):
+        return Path(sys.executable).resolve().parent
+    else:
+        return Path(__file__).resolve().parent.parent
