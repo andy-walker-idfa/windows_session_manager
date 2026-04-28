@@ -15,6 +15,7 @@ __pycache__/
 #Config and personal files
 config/
 data/
+app.log
 
 #Test files and folders created by PyInstall during packaging
 test_config.py
