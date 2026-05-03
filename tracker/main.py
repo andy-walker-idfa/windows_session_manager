@@ -42,6 +42,7 @@ def main():
                 try:
                     win32ts.WTSLogoffSession(win32ts.WTS_CURRENT_SERVER_HANDLE, user["SessionID"], False)
                     logging.info(f"User {user['User']} has been logged out due to time spent restrictions.")
+                    logging.info(f"User {user['User']} has spent today {usage_manager.read_user_today_usage(user["User"])} which is more than configured limit of {user_effective_limits.get("limit_minutes", 1440)}")
                     continue
                 except Exception as e:
                     logging.error(f"Error logging out user {user['User']}: {e}")

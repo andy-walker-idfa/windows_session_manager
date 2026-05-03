@@ -2,7 +2,7 @@
 from pathlib import Path
 import shared.defaults as defaults
 import json
-from datetime import date
+import datetime
 import logging
 
 #Function to get the path of timeline file, if data folder does not exist it will be created
@@ -33,13 +33,22 @@ def load_timeline_data():
 #  and date, it will be updated with new value.
 def write_timeline_data(user, data):
     data_to_write = load_timeline_data()
+    today = datetime.date.today().isoformat()
+    found_key_4date = None
     if data_to_write:
+        #Case when there is a record for this user
         if data_to_write.get(user, {}):
-            data_to_write[user].update({date.today().isoformat(): data})
+            for key in data_to_write[user].keys():
+                if key.startswith(today):
+                    found_key_4date = key
+                    break
+            if found_key_4date:
+                data_to_write[user].pop(found_key_4date)
+            data_to_write[user].update({datetime.datetime.now().isoformat(): data})
         else:
-            data_to_write.update({user: {date.today().isoformat(): data}})
+            data_to_write.update({user: {datetime.datetime.now().isoformat(): data}})
     else:
-        data_to_write = {user: {date.today().isoformat(): data}}
+        data_to_write = {user: {datetime.datetime.now().isoformat(): data}}
     try:
         with open(get_timeline_path(), "w") as f:
             json.dump(data_to_write, f)
@@ -51,14 +60,25 @@ def write_timeline_data(user, data):
 #Function returning time spent by user today. As it is written in timeline file, it is expected to be in minutes, but it can be None if user has not spent any time today or if there is no data for this user.
 def read_user_today_usage(user):
     data = load_timeline_data()
+    today = datetime.date.today().isoformat()
     if data.get(user, {}):
-        return data[user].get(date.today().isoformat(), None)
-    else:
-        return None
+        for key in data[user].keys():
+            if key.startswith(today):
+                return (data[user].get(key,None), key)
+    return (None, None)
 
 #Function to add time spent by user today, it will update timeline file with new value.
 def add_user_today_usage(user, minutes):
-    current_usage = read_user_today_usage(user)
+    current_usage, last_active = read_user_today_usage(user)
     if current_usage is None:
         current_usage = 0
-    return (write_timeline_data(user, current_usage + minutes))
+    if last_active:
+        difference = round((datetime.datetime.now() - datetime.datetime.fromisoformat(last_active)).total_seconds()/60)
+    else:
+        difference = 1440
+    if difference < defaults.service_check_interval:
+        return (write_timeline_data(user, current_usage + difference))
+    else:
+        return (write_timeline_data(user, current_usage + minutes))
+
+    
