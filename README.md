@@ -41,18 +41,31 @@ The tracker is a non-interactive script that runs as a Windows Scheduled Task, e
 **What it does on each execution:**
 
 1. Enumerates all active Windows sessions using the Windows Terminal Services API
-2. For each active session, checks if the logged-in user is managed
-3. Retrieves the user's effective limits for today (resolving the defaults → user → day override chain)
-4. Checks if the current time falls outside the allowed login window — if so, logs the user out
-5. Adds the check interval minutes to the user's daily usage counter
-6. Checks if the user has exceeded their daily maximum — if so, logs the user out
+2. Detects locked sessions using WMI (checks for LogonUI.exe process per session) and excludes them — locked screen time is not counted
+3. For each active and unlocked session, checks if the logged-in user is managed
+4. Retrieves the user's effective limits for today (resolving the defaults → user → day override chain)
+5. Checks if the current time falls outside the allowed login window — if so, logs the user out
+6. Calculates actual elapsed time since the last check and adds the appropriate minutes to the user's daily usage counter (prevents overcounting if the scheduled task runs more frequently than expected)
+7. Checks if the user has exceeded their daily maximum — if so, logs the user out
 
 **Key design decisions:**
 
-- Only active sessions (State 0) count toward usage time — disconnected sessions do not accumulate time
-- The tracker runs silently with no console window (pythonw.exe)
+- Only active and unlocked sessions count toward usage time — disconnected and locked sessions do not accumulate time
+- Elapsed time tracking prevents overcounting: if the tracker runs after 2 minutes instead of the configured 5, only 2 minutes are added; if there is a gap longer than the check interval, only the configured interval is added
+- The tracker runs silently with no console window
 - If a logoff attempt fails, the tracker continues tracking — it will try again on the next run
 - All actions are logged to a file for troubleshooting
+
+### Usage tracking
+
+The tracker stores daily usage data in a JSON timeline file. Each entry records the user, their accumulated minutes for the day, and the timestamp of the last check. The timestamp-based approach ensures accurate time tracking even when the scheduled task fires at irregular intervals.
+
+Example timeline data:
+```json
+{"luka": {"2026-05-02T14:30:00": 85, "2026-05-01T20:15:00": 174}}
+```
+
+The key is a full ISO datetime representing the last time the tracker recorded activity for that day. The value is the total minutes accumulated that day. When looking up today's usage, the tracker searches for a key starting with today's date.
 
 ## Project structure
 
@@ -60,7 +73,7 @@ The tracker is a non-interactive script that runs as a Windows Scheduled Task, e
 screen_time/
 ├── shared/                    # Code shared between both components
 │   ├── __init__.py
-│   ├── defaults.py            # Application constants and logging setup
+│   ├── defaults.py            # Application constants, logging setup, project root detection
 │   ├── config_manager.py      # TOML config read/write, validation, transformation
 │   ├── usage_manager.py       # JSON usage data read/write, daily tracking
 │   └── users.py               # Windows local user account enumeration
@@ -81,9 +94,9 @@ screen_time/
 
 ### Shared modules
 
-- **defaults.py** — Central location for application-wide constants: filenames, check intervals, log levels, and the logging setup function
+- **defaults.py** — Central location for application-wide constants: filenames, check intervals, log levels, logging setup function, and project root detection (supports both normal Python execution and PyInstaller bundled executables)
 - **config_manager.py** — Handles all operations on the TOML configuration file: loading, saving, resolving effective limits (with the defaults → user day-type → user per-day fallback chain), input validation, and data transformation between GUI and TOML formats
-- **usage_manager.py** — Manages the JSON timeline file that tracks daily usage per user: reading current usage, writing updates, and adding minutes to daily totals
+- **usage_manager.py** — Manages the JSON timeline file that tracks daily usage per user: reading current usage with timestamp-based keys, writing updates, and adding elapsed minutes to daily totals
 - **users.py** — Retrieves the list of local Windows user accounts for the configurator GUI
 
 ### Configuration file format (limits.toml)
@@ -132,14 +145,14 @@ Each parameter (limit_minutes, earliest_login, latest_login) falls back independ
 
 - Windows 10/11
 - Python 3.11 or newer
-- Required packages: customtkinter, pywin32, tomli_w
+- Required packages: customtkinter, pywin32, tomli_w, wmi
 
 ## Installation and setup
 
 1. Clone the repository
 2. Create a virtual environment: `python -m venv venv`
 3. Activate it: `venv\Scripts\activate`
-4. Install dependencies: `pip install customtkinter pywin32 tomli_w`
+4. Install dependencies: `pip install customtkinter pywin32 tomli_w wmi`
 5. Run the configurator: `python run_configurator.py`
 6. Configure your limits and save
 
@@ -188,14 +201,16 @@ pip install pyinstaller
 pyinstaller --onedir --noconsole --distpath dist/ScreenTime --name tracker run_tracker.py
 pyinstaller --onedir --noconsole --distpath dist/ScreenTime --name configurator run_configurator.py
 ```
-Copy the entire dist/ScreenTime/ folder to the target computer — for example to C:\ScreenTime\
+
+Copy the entire `dist/ScreenTime/` folder to the target computer — for example to `C:\ScreenTime\`.
 
 Then on the target computer:
 
-Double-click configurator.exe to configure limits and save
-Create the scheduled task pointing to tracker.exe:
+1. Double-click `configurator.exe` to configure limits and save
+2. Create the scheduled task pointing to `tracker.exe`:
 
-powershell$action = New-ScheduledTaskAction -Execute "C:\ScreenTime\tracker.exe"
+```powershell
+$action = New-ScheduledTaskAction -Execute "C:\ScreenTime\tracker.exe"
 
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $trigger.Repetition = (New-ScheduledTaskTrigger -Once -At "00:00" `
@@ -214,6 +229,9 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal
+```
+
+The `config/` and `data/` folders will be created automatically on first run. No Python installation is needed on the target machine.
 
 ## Limitations and future improvements
 
