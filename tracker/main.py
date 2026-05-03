@@ -8,6 +8,7 @@ import shared.defaults as defaults
 import win32ts
 import datetime
 import logging
+import wmi
 
 def main():
 
@@ -17,9 +18,12 @@ def main():
     except Exception as e:
         logging.error(f"Error enumerating sessions: {e}")
         exit(1)
-
+    c = wmi.WMI()
+    logonui = c.Win32_Process(Name="LogonUI.exe")
+    locked_sessions = [int(p.SessionId) for p in logonui]
     active_users = [{"User": win32ts.WTSQuerySessionInformation(win32ts.WTS_CURRENT_SERVER_HANDLE,session['SessionId'],win32ts.WTSUserName), "SessionID": session['SessionId']} for session in sessions if session['State'] == 0]
-    
+    active_users = [user for user in active_users if user['SessionID'] not in locked_sessions]
+
     #For each active user, check if they are managed by our program
     time_now = datetime.datetime.now().strftime("%H:%M")
     for user in active_users:
