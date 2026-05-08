@@ -207,29 +207,8 @@ Copy the entire `dist/ScreenTime/` folder to the target computer — for example
 Then on the target computer:
 
 1. Double-click `configurator.exe` to configure limits and save
-2. Create the scheduled task pointing to `tracker.exe`:
+2. Create the scheduled task pointing to `tracker.exe` using create-scheduedtask.ps1
 
-```powershell
-$action = New-ScheduledTaskAction -Execute "C:\ScreenTime\tracker.exe"
-
-$trigger = New-ScheduledTaskTrigger -AtStartup
-$trigger.Repetition = (New-ScheduledTaskTrigger -Once -At "00:00" `
-    -RepetitionInterval (New-TimeSpan -Minutes 5)).Repetition
-
-$settings = New-ScheduledTaskSettingsSet `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -StartWhenAvailable
-
-$principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -RunLevel Highest
-
-Register-ScheduledTask `
-    -TaskName "ScreenTimeTracker" `
-    -Action $action `
-    -Trigger $trigger `
-    -Settings $settings `
-    -Principal $principal
-```
 
 The `config/` and `data/` folders will be created automatically on first run. No Python installation is needed on the target machine.
 
