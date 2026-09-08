@@ -13,26 +13,58 @@ def get_timeline_path():
     except PermissionError:
         logging.error("Permission denied: Could not create 'data' directory. Please run the program with appropriate permissions.")
         exit(1)
-    
     return root_folder / "data" / defaults.time_tracking_file
 
-#Function to read data from timeline file
+#Function to read data from timeline file as it is stored on disk, without any filtering.
 def load_timeline_data():
     timeline_file_path = get_timeline_path()
-    if Path.exists(timeline_file_path):
-        try:
-            with open(timeline_file_path, "r") as f:
-                return json.load(f)
-        except Exception as e:
-            logging.error(f"Error loading timeline file: {e}")
-            return {}
-    else:
+    if not Path.exists(timeline_file_path):
         return {}
+    try:
+        with open(timeline_file_path, "r") as f:
+            return json.load(f)
+    except Exception as e:
+        logging.error(f"Error loading timeline file: {e}")
+        return {}
+
+#Function dropping records older than defaults.timeline_period days. It is applied only when we rewrite
+#the file, so reads always see whatever is on disk. Record keys can be either a plain date (format used
+#before full datetime was introduced) or a full datetime, fromisoformat accepts both. Cut off is
+#inclusive, so today plus defaults.timeline_period previous days are kept.
+def prune_timeline_data(timeline_data):
+    period = getattr(defaults, "timeline_period", None)
+    #Refuse to prune on a nonsensical retention period, otherwise we would wipe the history for good
+    if not isinstance(period, int) or isinstance(period, bool) or period < 1:
+        logging.error(f"Invalid timeline_period value {period!r}, keeping timeline file as it is.")
+        return timeline_data
+    cut_off_date = datetime.date.today() - datetime.timedelta(days=period)
+    pruned_log = {}
+    for person, records in timeline_data.items():
+        if not isinstance(records, dict):
+            logging.warning(f"Unexpected timeline content for user {person}, keeping it as it is.")
+            pruned_log[person] = records
+            continue
+        filtered_timeline = {}
+        for date_recorded, minutes_recorded in records.items():
+            try:
+                recorded_date = datetime.datetime.fromisoformat(date_recorded).date()
+            except (ValueError, TypeError):
+                #Key we cannot understand, keep it rather than silently throwing the data away
+                logging.warning(f"Unrecognised timeline key '{date_recorded}' for user {person}, keeping it.")
+                filtered_timeline[date_recorded] = minutes_recorded
+                continue
+            if recorded_date >= cut_off_date:
+                filtered_timeline[date_recorded] = minutes_recorded
+        if filtered_timeline:
+            pruned_log[person] = filtered_timeline
+    return pruned_log
+
 #Function to write data to timeline file, data should be in format of minutes spent by user today,
 # it will be stored in timeline file with current date as key. If there is already data for this user
-#  and date, it will be updated with new value.
+#  and date, it will be updated with new value. Records older than defaults.timeline_period days are
+#  dropped here, as this is the only place where the whole file is rewritten.
 def write_timeline_data(user, data):
-    data_to_write = load_timeline_data()
+    data_to_write = prune_timeline_data(load_timeline_data())
     today = datetime.date.today().isoformat()
     found_key_4date = None
     if data_to_write:
@@ -80,5 +112,3 @@ def add_user_today_usage(user, minutes):
         return (write_timeline_data(user, current_usage + difference))
     else:
         return (write_timeline_data(user, current_usage + minutes))
-
-    

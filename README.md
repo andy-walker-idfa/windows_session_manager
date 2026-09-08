@@ -2,6 +2,8 @@
 
 A lightweight parental control tool for managing and enforcing computer usage time limits on Windows machines.
 
+Current version: **1.0.0** — see [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## What problem does it solve?
 
 Managing children's screen time across multiple Windows computers is surprisingly difficult. Microsoft Family Safety is unreliable, and Windows security logs make it nearly impossible to accurately calculate actual session time — especially when accounting for sleep, hibernation, and inactive sessions.
@@ -67,6 +69,8 @@ Example timeline data:
 
 The key is a full ISO datetime representing the last time the tracker recorded activity for that day. The value is the total minutes accumulated that day. When looking up today's usage, the tracker searches for a key starting with today's date.
 
+Records older than `timeline_period` days (30 by default, configurable in `defaults.py`) are dropped whenever the timeline file is rewritten, so the file does not grow indefinitely.
+
 ## Project structure
 
 ```
@@ -96,7 +100,7 @@ screen_time/
 
 - **defaults.py** — Central location for application-wide constants: filenames, check intervals, log levels, logging setup function, and project root detection (supports both normal Python execution and PyInstaller bundled executables)
 - **config_manager.py** — Handles all operations on the TOML configuration file: loading, saving, resolving effective limits (with the defaults → user day-type → user per-day fallback chain), input validation, and data transformation between GUI and TOML formats
-- **usage_manager.py** — Manages the JSON timeline file that tracks daily usage per user: reading current usage with timestamp-based keys, writing updates, and adding elapsed minutes to daily totals
+- **usage_manager.py** — Manages the JSON timeline file that tracks daily usage per user: reading current usage with timestamp-based keys, writing updates, adding elapsed minutes to daily totals, and expiring records older than the configured retention period
 - **users.py** — Retrieves the list of local Windows user accounts for the configurator GUI
 
 ### Configuration file format (limits.toml)
