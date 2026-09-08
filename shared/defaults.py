@@ -4,6 +4,8 @@ import sys
 
 #Application Name
 app_name = "Time Manager"
+#Application version
+__version__ = "1.0.0"
 #File name where configuration limits are stored
 limits_config_file = "limits.toml"
 #Configuration limits we are working with
@@ -16,6 +18,9 @@ service_check_interval = 5
 log_name = "app.log"
 #Default logging level
 log_level = "DEBUG"
+#Timeline history period
+#Period of time (days) for which we will be keeping logged time for a user in timeline.json file
+timeline_period = 30
 #Configurting logging
 def configure_logging():
     logging.basicConfig(

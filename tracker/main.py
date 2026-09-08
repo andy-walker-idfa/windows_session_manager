@@ -42,11 +42,14 @@ def main():
             #Add service_check_interval to their time spent today                        
             usage_manager.add_user_today_usage(user["User"],defaults.service_check_interval)
             #Check if they have exceeded their limit, if they have, log them out
-            if usage_manager.read_user_today_usage(user["User"]) > user_effective_limits.get("limit_minutes", 1440):
+            #read_user_today_usage returns a (minutes, timestamp) pair, we only need the minutes here
+            today_usage, _ = usage_manager.read_user_today_usage(user["User"])
+            limit_minutes = user_effective_limits.get("limit_minutes", 1440)
+            if today_usage is not None and today_usage > limit_minutes:
                 try:
                     win32ts.WTSLogoffSession(win32ts.WTS_CURRENT_SERVER_HANDLE, user["SessionID"], False)
                     logging.info(f"User {user['User']} has been logged out due to time spent restrictions.")
-                    logging.info(f"User {user['User']} has spent today {usage_manager.read_user_today_usage(user["User"])} which is more than configured limit of {user_effective_limits.get("limit_minutes", 1440)}")
+                    logging.info(f"User {user['User']} has spent today {today_usage} which is more than configured limit of {limit_minutes}")
                     continue
                 except Exception as e:
                     logging.error(f"Error logging out user {user['User']}: {e}")
