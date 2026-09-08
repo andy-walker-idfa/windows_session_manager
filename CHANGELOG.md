@@ -32,6 +32,15 @@ records the state it has reached rather than a single change.
 - **Guarded against silent history loss.** A non-positive or non-integer `timeline_period` would
   have caused the next write to permanently truncate the timeline. Invalid values are now rejected
   and the file is left untouched.
+- **Tracker silently ignored a configured user whose limits failed to save.** `get_user_config()`
+  returns `None` for an unmanaged user but an empty dict for a user listed in `limits.toml` with no
+  limits of their own, and the tracker gated on truthiness, so both were treated as "not managed".
+  A deployed config containing a bare `[users.<name>]` header meant the tracker enumerated sessions
+  and enforced nothing, with no error in the log. The gate now compares against `None`, an empty
+  entry falls back to the global defaults through `get_effective_limits()`, and a warning is logged.
+- **Added configuration diagnostics.** The tracker now logs the resolved `limits.toml` path, the
+  list of managed users, and the effective limits applied per user, and warns when no users are
+  configured at all — the previous silent no-op was indistinguishable from normal operation.
 - **Reads no longer discard data.** Timeline expiry was applied on load, which meant any caller
   reading history silently received truncated data. Loading and pruning are now separate, and
   pruning happens only in `write_timeline_data()`.
