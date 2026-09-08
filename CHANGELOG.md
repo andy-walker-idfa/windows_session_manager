@@ -38,6 +38,10 @@ records the state it has reached rather than a single change.
   A deployed config containing a bare `[users.<name>]` header meant the tracker enumerated sessions
   and enforced nothing, with no error in the log. The gate now compares against `None`, an empty
   entry falls back to the global defaults through `get_effective_limits()`, and a warning is logged.
+- **Scheduled task could be killed after 72 hours.** `create_scheduledtask.ps1` built its settings
+  without `-ExecutionTimeLimit`, so the registered task inherited Windows' three day default. The
+  tracker is a long running loop with an at-startup trigger only, so once the Task Scheduler stopped
+  it nothing restarted it until the next reboot. The script now registers it with no time limit.
 - **Added configuration diagnostics.** The tracker now logs the resolved `limits.toml` path, the
   list of managed users, and the effective limits applied per user, and warns when no users are
   configured at all — the previous silent no-op was indistinguishable from normal operation.
