@@ -25,11 +25,22 @@ def main():
     active_users = [user for user in active_users if user['SessionID'] not in locked_sessions]
 
     #For each active user, check if they are managed by our program
+    managed_users = list(config_manager.load_config().get("users", {}))
+    logging.debug(f"Using configuration file {config_manager.get_config_path()}, managed users: {managed_users or 'none'}")
+    if not managed_users:
+        logging.warning(f"No users are configured in {config_manager.get_config_path()}, nothing will be enforced. Run the configurator to set limits.")
     time_now = datetime.datetime.now().strftime("%H:%M")
     for user in active_users:
         logging.debug(f"Checking user {user['User']} with session ID {user['SessionID']}")
-        if config_manager.get_user_config(user["User"]):
+        #get_user_config returns None for a user we do not manage and an empty dict for a user who is
+        #listed but has no limits of their own, so compare against None. An empty entry still resolves
+        #through get_effective_limits to the global defaults instead of being silently skipped.
+        user_config = config_manager.get_user_config(user["User"])
+        if user_config is not None:
+            if not user_config:
+                logging.warning(f"User {user['User']} is listed in the configuration file but has no limits of their own, falling back to global defaults.")
             user_effective_limits = config_manager.get_effective_limits(user["User"])
+            logging.debug(f"Effective limits for {user['User']}: {user_effective_limits}")
             #If they are check if login is allowed at this time. If not, log them out.
             if time_now < user_effective_limits.get("earliest_login", "00:00") \
             or time_now > user_effective_limits.get("latest_login", "23:59"):
