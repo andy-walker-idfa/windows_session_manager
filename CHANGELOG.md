@@ -5,6 +5,56 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-10-26
+
+Rewritten for several computers and operating systems sharing one daily total.
+
+### Added
+
+- **Linux and macOS support.** systemd-logind (`loginctl`) and IORegistry/`launchctl` adapters next
+  to the Windows one. Only active, unlocked, local desktop sessions count.
+- **Shared usage across computers.** Each installation writes its own daily record. Records are
+  copied to a WebDAV store over HTTPS, and a person's usage is the sum over all installations.
+- **Offline mode.** If the store can't be reached, the tracker uses local and cached data together
+  with the stricter of the person's limits and the global defaults, then uploads its records when
+  the store is back.
+- **Shared configuration** on the store, validated before use, with a local cache, a seed config
+  at install time, and a revision check against concurrent edits.
+- **People with several account names** (`accounts = [...]`); account names are compared without
+  regard to case.
+- **Configurator rework.** It runs on any OS, loads and shows the current settings, edits people,
+  defaults and tracker settings, and refuses to save over someone else's newer changes.
+- **Connection tab in the configurator.** You set the network store (URL, username, password,
+  certificate file) in the GUI and test it with the same checks as `tools/check_store.py`. The
+  running tracker picks up saved settings by itself.
+- **No installer.** `build.py` produces a release zip per OS. You copy the folder into a protected
+  location, and the configurator does the rest: it shows the command your scheduled task or service
+  must run, warns when standard users could change the program or read the network password, and
+  fixes that with one button. It can also import a 1.x `limits.toml`. The README describes the
+  Windows scheduled task, and templates are provided for the systemd service and the macOS
+  LaunchDaemon.
+- `tools/check_store.py`, a command-line check of a WebDAV store before installation.
+- **Readable log at the normal level.** Without DEBUG, the log records each managed person's day on
+  this computer: when their session starts being counted (with minutes used and the limit), when
+  the screen is locked or the user switched away, when 80% of the limit is used, every logoff with its
+  reason, when the session ends, and when the network store goes offline and comes back.
+- `--once` and `--dry-run` tracker options for testing; rotating log files; a pytest suite.
+
+### Changed
+
+- Elapsed time is measured with the process's monotonic clock and capped at the check interval,
+  so changes to the wall clock and time spent asleep no longer affect usage.
+- The daily limit is reached at exactly `limit_minutes` (it used to be after it was exceeded).
+- Files are written atomically and parsed strictly. A damaged record is set aside and restored
+  from the network copy instead of wiping history.
+- `timeline.json` is replaced by per-installation daily records. The 1.x timeline is not imported;
+  the 1.x `limits.toml` is imported as the seed config.
+
+### Fixed
+
+- Day overrides saved by the 1.x configurator (`mon` ... `sun`, and the "Per-day overrides" table)
+  were never applied by the tracker. They are converted and applied now.
+
 ## [1.0.0] - 2026-09-08
 
 First tagged release. The tool has been in real use for a while, so this entry

@@ -1,39 +1,20 @@
-import logging
-from pathlib import Path
 import sys
+from pathlib import Path
 
-#Application Name
 app_name = "Time Manager"
-#Application version
-__version__ = "1.0.0"
-#File name where configuration limits are stored
-limits_config_file = "limits.toml"
-#Configuration limits we are working with
-limits_keys = ["limit_minutes", "earliest_login", "latest_login"]
-#Time tracking file where time spent by users will be stored
-time_tracking_file = "timeline.json"
-#Time interval in minutes, which will be used by tracker script to check users' sessions and update time spent by them today, it is expected to be run with this period of time, but it can be changed if needed.
-service_check_interval = 5
-#Log file name
-log_name = "app.log"
-#Default logging level
-log_level = "DEBUG"
-#Timeline history period
-#Period of time (days) for which we will be keeping logged time for a user in timeline.json file
-timeline_period = 30
-#Configurting logging
-def configure_logging():
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s",
-        handlers=[
-            logging.FileHandler(get_project_root() / log_name),
-            logging.StreamHandler()
-        ]
-    )
-#Function to determine root folder. Depends how we execute it. Either directly py file or via PyInstaller from executable file
-def get_project_root():
-    if hasattr(sys,'_MEIPASS'):
+__version__ = "2.0.0"
+
+# Names inside the install folder.
+instance_file = "instance.toml"
+legacy_config_file = Path("config") / "limits.toml"
+
+
+def get_install_root() -> Path:
+    """Folder that holds instance.toml, data/ and logs/.
+
+    PyInstaller one-folder build: <root>/tracker/tracker(.exe), so the root is one level above the
+    executable's folder. From source: the repository folder.
+    """
+    if hasattr(sys, "_MEIPASS"):
         return Path(sys.executable).resolve().parent.parent
-    else:
-        return Path(__file__).resolve().parent.parent
+    return Path(__file__).resolve().parent.parent

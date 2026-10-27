@@ -8,17 +8,27 @@ venv/
 __pycache__/
 *.pyc
 *.pyo
+.pytest_cache/
 
 # VS Code
 .vscode/
 
-#Config and personal files
+# Runtime and personal files (1.x and 2.x layouts)
 config/
 data/
+logs/
 app.log
+instance.toml
+seed-limits.toml
 
-#Test files and folders created by PyInstall during packaging
+# Scratch files and PyInstaller output (the .spec files are committed)
 test_config.py
 dist/
 build/
-*.spec
+
+# Environment-specific files that do not belong in the repository
+*.crt
+*.pem
+*.key
+._*
+.DS_Store

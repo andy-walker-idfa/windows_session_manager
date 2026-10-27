@@ -1,0 +1,18 @@
+# systemd service for the Time Manager tracker (Linux). See README.md, "Service (Linux)".
+# Install: sudo cp timemanager-tracker.service /etc/systemd/system/
+#          sudo systemctl daemon-reload && sudo systemctl enable --now timemanager-tracker
+[Unit]
+Description=Time Manager session time tracker
+# Prefer starting after the network is up, but also start (and enforce offline limits) without it.
+Wants=network-online.target
+After=network-online.target systemd-logind.service
+
+[Service]
+Type=simple
+ExecStart=/opt/timemanager/tracker/tracker
+Restart=always
+RestartSec=30
+User=root
+
+[Install]
+WantedBy=multi-user.target

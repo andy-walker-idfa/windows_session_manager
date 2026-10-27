@@ -1,296 +1,362 @@
+"""Configurator window. Edits the shared config in memory and saves it through ConfigSession.
+
+Blank fields inherit: a person's weekday/weekend values fall back to the defaults, a day override
+falls back to the person's weekday/weekend values.
+"""
+
+import copy
+from pathlib import Path
+from tkinter import filedialog, messagebox
+
 import customtkinter
-import shared.config_manager
-from tkinter import messagebox
 
-class CheckboxFrame4FirstWindow(customtkinter.CTkScrollableFrame):
-    def __init__(self, master, values: list[dict]):
+from configurator.connection import ConnectionFrame
+from configurator.session import ConfigSession, RevisionConflict
+from core.config import DAYS, DEFAULT_SETTINGS, LOG_LEVELS, ConfigError, parse_config, validate_config
+from storage.base import StoreError
+
+FIELDS = (("limit_minutes", "Max minutes"), ("earliest_login", "Earliest login"), ("latest_login", "Latest login"))
+
+
+def _to_value(key: str, text: str):
+    text = text.strip()
+    if key == "limit_minutes" and text.isdigit():
+        return int(text)
+    return text
+
+
+class LimitsRow:
+    """The three entries of one row in a LimitsTable; get() returns only the filled in values."""
+
+    def __init__(self, entries: dict):
+        self.entries = entries
+
+    def set(self, limits: dict | None) -> None:
+        for key, entry in self.entries.items():
+            entry.delete(0, "end")
+            value = (limits or {}).get(key)
+            if value is not None:
+                entry.insert(0, str(value))
+
+    def get(self) -> dict:
+        return {k: _to_value(k, e.get()) for k, e in self.entries.items() if e.get().strip()}
+
+
+class LimitsTable(customtkinter.CTkFrame):
+    """Rows of limits in one grid, so labels and columns line up whatever the font size."""
+
+    def __init__(self, master, rows: list[tuple[str, str]]):
+        super().__init__(master, fg_color="transparent")
+        for col, (_, header) in enumerate(FIELDS, start=1):
+            customtkinter.CTkLabel(self, text=header, anchor="w").grid(row=0, column=col, padx=4, sticky="w")
+        self.rows: dict[str, LimitsRow] = {}
+        for r, (name, title) in enumerate(rows, start=1):
+            customtkinter.CTkLabel(self, text=title, anchor="w").grid(row=r, column=0, padx=(0, 10), sticky="w")
+            entries = {}
+            for col, (key, _) in enumerate(FIELDS, start=1):
+                entry = customtkinter.CTkEntry(self, width=110, corner_radius=4, border_width=1)
+                entry.grid(row=r, column=col, padx=4, pady=2, sticky="w")
+                entries[key] = entry
+            self.rows[name] = LimitsRow(entries)
+
+
+class PersonEditor(customtkinter.CTkScrollableFrame):
+    def __init__(self, master):
         super().__init__(master)
-        self.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-        self.values = values
-        self.checkboxes = []
-        for i, value in enumerate(values):
-            var = customtkinter.BooleanVar(value=False)
-            self.checkbox = customtkinter.CTkCheckBox(self, text=f"User: {values[i]['Name']};    Enabled: {values[i]['Enabled']}", variable=var)
-            self.checkbox.grid(row=i, column=0, padx=20, pady=10, sticky="w")
-            self.checkboxes.append((value, var))
-    
-    def get_selected(self):
-        return [
-            item for item, var in self.checkboxes if var.get()
-        ]
+        self.grid_columnconfigure(0, weight=1)
+        self.title = customtkinter.CTkLabel(self, text="Select or add a person",
+                                            font=customtkinter.CTkFont(size=18, weight="bold"))
+        self.title.grid(row=0, column=0, sticky="w", pady=(0, 8))
+        customtkinter.CTkLabel(self, text="Other account names (comma separated), if they differ between computers:",
+                               anchor="w").grid(row=1, column=0, sticky="w")
+        self.accounts = customtkinter.CTkEntry(self)
+        self.accounts.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        customtkinter.CTkLabel(self, text="Blank fields use the defaults.", anchor="w").grid(row=3, column=0, sticky="w")
+        base = LimitsTable(self, [("weekday", "Weekday"), ("weekend", "Weekend")])
+        base.grid(row=4, column=0, sticky="w", pady=(0, 12))
+        self.weekday, self.weekend = base.rows["weekday"], base.rows["weekend"]
+        customtkinter.CTkLabel(self, text="Day overrides (blank fields use weekday/weekend values):",
+                               anchor="w").grid(row=6, column=0, sticky="w")
+        days = LimitsTable(self, [(day, day.capitalize()) for day in DAYS])
+        days.grid(row=7, column=0, sticky="w")
+        self.days = days.rows
+        self.person = None
+        self._set_enabled(False)
+
+    def _set_enabled(self, enabled: bool) -> None:
+        state = "normal" if enabled else "disabled"
+        widgets = [self.accounts] + [e for row in (self.weekday, self.weekend, *self.days.values())
+                                     for e in row.entries.values()]
+        for widget in widgets:
+            widget.configure(state=state)
+
+    def show(self, person: str | None, entry: dict | None) -> None:
+        self.person = person
+        self._set_enabled(True)
+        self.title.configure(text=person or "Select or add a person")
+        entry = entry or {}
+        self.accounts.delete(0, "end")
+        self.accounts.insert(0, ", ".join(entry.get("accounts", [])))
+        self.weekday.set(entry.get("weekday"))
+        self.weekend.set(entry.get("weekend"))
+        overrides = entry.get("day_overrides", {})
+        for day, row in self.days.items():
+            row.set(overrides.get(day))
+        if person is None:
+            self._set_enabled(False)
+
+    def collect(self) -> dict:
+        entry = {}
+        accounts = [a.strip() for a in self.accounts.get().split(",") if a.strip()]
+        if accounts:
+            entry["accounts"] = accounts
+        for name, row in (("weekday", self.weekday), ("weekend", self.weekend)):
+            limits = row.get()
+            if limits:
+                entry[name] = limits
+        overrides = {day: row.get() for day, row in self.days.items() if row.get()}
+        if overrides:
+            entry["day_overrides"] = overrides
+        return entry
 
 
-class FirstWindow(customtkinter.CTk):
-    def __init__(self, values: list[dict], button_title, app_title, window_title):
+class ConfiguratorApp(customtkinter.CTk):
+    def __init__(self, instance, local_accounts: list[str], app_title: str, startup_warning: str = ""):
         super().__init__()
-
+        self.session = ConfigSession(instance)
+        self.local_accounts = local_accounts
+        self.config_data: dict = {}
+        self.limits_loaded = False
         self.title(app_title)
-        self.button_title = button_title
-        self.window_title = window_title
-        self.geometry("450x600")
+        self.geometry("820x760")
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        self.selected_values = []
+        self.status = customtkinter.CTkLabel(self, text="", anchor="w")
+        self.status.grid(row=0, column=0, padx=16, pady=(12, 0), sticky="ew")
 
-        self.label = customtkinter.CTkLabel(self, text=f"{self.window_title}: ", font=customtkinter.CTkFont(size=20, weight="bold"))
-        self.label.grid(row=0, column=0, padx=20, pady=(20, 0))
+        self.tabs = tabs = customtkinter.CTkTabview(self, anchor="nw", command=self._tab_changed)
+        tabs.grid(row=1, column=0, padx=16, pady=8, sticky="nsew")
+        for name in ("People", "Defaults", "Settings", "Connection"):
+            tabs.add(name)
+        self._build_people(tabs.tab("People"))
+        self._build_defaults(tabs.tab("Defaults"))
+        self._build_settings(tabs.tab("Settings"))
+        connection_tab = tabs.tab("Connection")
+        connection_tab.grid_columnconfigure(0, weight=1)
+        connection_tab.grid_rowconfigure(0, weight=1)
+        self.connection = ConnectionFrame(connection_tab, instance.root, instance.remote, self.on_connection_saved)
+        self.connection.grid(row=0, column=0, sticky="nsew")
 
-        self.frame = CheckboxFrame4FirstWindow(self, values)
-        self.frame.grid(row=1, column=0, padx=20, pady=20, sticky="nsew")
+        # Reload / Save limits apply to the limit tabs; the Connection tab has its own buttons.
+        self.limit_buttons = customtkinter.CTkFrame(self, fg_color="transparent")
+        self.limit_buttons.grid(row=2, column=0, pady=(0, 12))
+        customtkinter.CTkButton(self.limit_buttons, text="Reload", width=110,
+                                command=self.reload).grid(row=0, column=0, padx=8)
+        customtkinter.CTkButton(self.limit_buttons, text="Save limits", width=110,
+                                command=self.save).grid(row=0, column=1, padx=8)
+        customtkinter.CTkButton(self.limit_buttons, text="Import from file...", width=140,
+                                command=self.import_file).grid(row=0, column=2, padx=8)
+        if startup_warning:
+            self.after(200, lambda: messagebox.showwarning("Connection settings", startup_warning))
+        self.after(50, self.reload)
 
-        self.button = customtkinter.CTkButton(self, text=button_title,command=self.button_callback)
-        self.button.grid(row=2, column=0, padx=20, pady=20, sticky="s")
+    def _tab_changed(self):
+        if self.tabs.get() == "Connection":
+            self.limit_buttons.grid_remove()
+        else:
+            self.limit_buttons.grid()
 
-    def button_callback(self):
-        self.selected_values = self.frame.get_selected()
-        self.destroy()
-    
-class SecondWindow(customtkinter.CTk):
-    def __init__(self, selected_users, app_name="My App", window_title=None, tab_values=None):
-        super().__init__()
-        self.title(app_name)
-        self.geometry("600x800")
-        self.label = customtkinter.CTkLabel(self, text=window_title, font=customtkinter.CTkFont(size=19, weight="bold"))
-        self.label.grid(row=0, column=0, padx=20, pady=(20, 0), sticky="w")
-        self.tab_view = TabView4SecondWindow(self, tab_values)
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-        self.tab_view.grid(row=1, column=0, padx=20, pady=20, sticky="nsew")
+    def on_connection_saved(self, instance):
+        self.session = ConfigSession(instance)
+        self.reload(quiet=True)
+        if self.limits_loaded and self.session.store_is_empty and messagebox.askyesno(
+                "Empty network store",
+                "The network store has no limits yet.\n\nUpload this computer's current limits to it?"):
+            self.save()
 
-        #Configuring Defaults tab
-        defaults_tab = self.tab_view.tab("Defaults")
-        defaults_tab.grid_columnconfigure(0, weight=1)
-        defaults_tab.grid_rowconfigure(0, weight=1)
-        defaults_scroll = customtkinter.CTkScrollableFrame(defaults_tab)
-        defaults_scroll.grid(row=0, column=0, sticky="nsew")
-        defaults_scroll.grid_columnconfigure(0, weight=1)
+    # ----- tabs ----------------------------------------------------------------------------
+    def _build_people(self, tab):
+        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_rowconfigure(0, weight=1)
+        left = customtkinter.CTkFrame(tab)
+        left.grid(row=0, column=0, sticky="ns", padx=(0, 8))
+        left.grid_rowconfigure(0, weight=1)
+        self.people_list = customtkinter.CTkScrollableFrame(left, width=180)
+        self.people_list.grid(row=0, column=0, sticky="ns", padx=6, pady=6)
+        self.new_person = customtkinter.CTkEntry(left, placeholder_text="New person name")
+        self.new_person.grid(row=1, column=0, sticky="ew", padx=6, pady=2)
+        customtkinter.CTkButton(left, text="Add person", command=self.add_person).grid(row=2, column=0, sticky="ew", padx=6, pady=2)
+        self.account_choice = customtkinter.CTkOptionMenu(left, values=["Add local account..."],
+                                                          command=self.add_local_account)
+        self.account_choice.grid(row=3, column=0, sticky="ew", padx=6, pady=2)
+        customtkinter.CTkButton(left, text="Remove selected", fg_color="#a33", hover_color="#822",
+                                command=self.remove_person).grid(row=4, column=0, sticky="ew", padx=6, pady=(2, 6))
+        self.editor = PersonEditor(tab)
+        self.editor.grid(row=0, column=1, sticky="nsew")
 
-        TabLabel4SecondWindow(defaults_scroll, "These values apply to all managed users unless overridden in user settings.").grid(row=0, \
-            column=0, padx=20, pady=(20, 0), sticky="wn")
-        self.defaults_frames = []
-        self.defaults_frames.append(LimitsFrame4SecondWindow(defaults_scroll, "Weekday", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]))
-        self.defaults_frames[0].grid(row=1, column=0, padx=0, pady=20, sticky="nsew")
-        self.defaults_frames.append(LimitsFrame4SecondWindow(defaults_scroll, "Weekend", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}]))
-        self.defaults_frames[1].grid(row=2, column=0, padx=0, pady=20, sticky="nsew")
+    def _build_defaults(self, tab):
+        customtkinter.CTkLabel(tab, text="These limits apply to every person unless overridden. "
+                                         "They are also the offline limits.", anchor="w").grid(row=0, column=0, sticky="w", pady=(4, 12))
+        table = LimitsTable(tab, [("weekday", "Weekday"), ("weekend", "Weekend")])
+        table.grid(row=1, column=0, sticky="w")
+        self.default_rows = table.rows
 
-        #Configuring User Settings tab
-        user_settings_tab = self.tab_view.tab("User Settings")
-        user_settings_tab.grid_columnconfigure(0, weight=1)
-        user_settings_tab.grid_rowconfigure(0, weight=1)
-        user_settings_scroll = customtkinter.CTkScrollableFrame(user_settings_tab)
-        user_settings_scroll.grid(row=0, column=0, sticky="nsew")
-        user_settings_scroll.grid_columnconfigure(0, weight=1)
+    def _build_settings(self, tab):
+        labels = (("check_interval_minutes", "Check interval (minutes, 1-60)"),
+                  ("retention_days", "Keep usage history (days)"))
+        self.setting_entries = {}
+        for i, (key, text) in enumerate(labels):
+            customtkinter.CTkLabel(tab, text=text, anchor="w").grid(row=i, column=0, sticky="w", pady=4, padx=(0, 12))
+            entry = customtkinter.CTkEntry(tab, width=100)
+            entry.grid(row=i, column=1, sticky="w")
+            self.setting_entries[key] = entry
+        customtkinter.CTkLabel(tab, text="Log level", anchor="w").grid(row=2, column=0, sticky="w", pady=4)
+        self.log_level = customtkinter.CTkOptionMenu(tab, values=list(LOG_LEVELS))
+        self.log_level.grid(row=2, column=1, sticky="w")
 
-        self.user_frames = []
-        for user in selected_users:
-            config_settings = [{"Name": "Inherit defaults only"}, {"Name": "Custom weekday / weekend"}, {"Name": "Per-day overrides"}]
-            user_frame = UserSettingsFrame4SecondWindow(user_settings_scroll, user["Name"], config_settings)
-            user_frame.grid(row=selected_users.index(user), column=0, padx=0, pady=20, sticky="nsew")
-            self.user_frames.append(user_frame)
-        
-        #Placing buttons for saving/canceling changes
-        self.button_frame = customtkinter.CTkFrame(self)
-        self.button_frame.grid(row=2, column=0, padx=20, pady=20)
-        self.button_frame.grid_columnconfigure(0)
-        self.button_frame.grid_columnconfigure(1)
-        self.save_button = customtkinter.CTkButton(self.button_frame, text="Save", command=self.save_changes, width=100)
-        self.save_button.grid(row=0, column=0, padx=10, pady=0)
-        self.cancel_button = customtkinter.CTkButton(self.button_frame, text="Cancel", command=self.cancel, width=100)
-        self.cancel_button.grid(row=0, column=1, padx=10, pady=0)
+    # ----- people list ---------------------------------------------------------------------
+    def _refresh_people(self):
+        for child in self.people_list.winfo_children():
+            child.destroy()
+        for i, person in enumerate(sorted(self.config_data.get("users", {}))):
+            selected = person == self.editor.person
+            customtkinter.CTkButton(self.people_list, text=person, anchor="w",
+                                    fg_color=None if selected else "transparent",
+                                    command=lambda p=person: self.select_person(p)).grid(row=i, column=0, sticky="ew", pady=1)
+        mapped = {a.casefold() for p, e in self.config_data.get("users", {}).items()
+                  for a in [p, *e.get("accounts", [])]}
+        choices = [a for a in self.local_accounts if a.casefold() not in mapped]
+        self.account_choice.configure(values=["Add local account..."] + choices)
+        self.account_choice.set("Add local account...")
 
-            
-    def save_changes(self):
-        #In the future this function will save changes to database or configuration file, currently it just prints them to console
-        defaults = {}
-        for frame in self.defaults_frames:
-            limits = frame.get_limits()
-            defaults[frame.label.cget("text")] = limits
-        if "Error" in defaults.values():
+    def _commit_editor(self):
+        if self.editor.person is not None and self.editor.person in self.config_data.get("users", {}):
+            self.config_data["users"][self.editor.person] = self.editor.collect()
+
+    def select_person(self, person: str | None):
+        self._commit_editor()
+        self.editor.show(person, self.config_data.get("users", {}).get(person) if person else None)
+        self._refresh_people()
+
+    def _add(self, name: str):
+        name = name.strip()
+        if not name:
             return
-
-        users = {}
-        for user_frame in self.user_frames:
-            user_limits = user_frame.get_user_limits()
-            users[user_frame.label1.cget("text")] = user_limits
-        if "Error" in users.values():
+        users = self.config_data.setdefault("users", {})
+        if name.casefold() in {p.casefold() for p in users}:
+            messagebox.showwarning("Already exists", f"'{name}' is already in the list.")
             return
-        data2save = shared.config_manager.build_config(defaults,users)
-        shared.config_manager.save_config(data2save)
-        self.destroy()
-    
-    def cancel(self):
-        self.destroy()
+        self._commit_editor()
+        users[name] = {}
+        self.select_person(name)
 
+    def add_person(self):
+        self._add(self.new_person.get())
+        self.new_person.delete(0, "end")
 
-class TabView4SecondWindow(customtkinter.CTkTabview):
-    def __init__(self, master, values):
-        super().__init__(master, anchor="nw")
-        for tab in values:
-            self.add(tab["Name"])
+    def add_local_account(self, choice: str):
+        if choice != "Add local account...":
+            self._add(choice)
 
-class LimitsFrame4SecondWindow(customtkinter.CTkFrame):
-    def __init__(self, master, frame_title, limits_values, padx=20):
-        super().__init__(master)
-        self.label = customtkinter.CTkLabel(self, text=frame_title, font=customtkinter.CTkFont(size=18, weight="bold"))
-        self.label.grid(row=0, column=0, padx=padx, pady=(0, 0), sticky="wn")
-        self.lables = []
-        self.entry = []
-        for limit in limits_values:
-            label = customtkinter.CTkLabel(self, text=limit["Name"])
-            entry = customtkinter.CTkEntry(self)
-            label.grid(row=1, column=limits_values.index(limit), padx=padx, pady=0, sticky="w")
-            entry.grid(row=2, column=limits_values.index(limit), padx=padx, pady=0, sticky="w")
-            self.entry.append(entry)
-            self.lables.append(label)
-    
-    def get_limits(self):
-        limits = {}
-        for label, entry in zip(self.lables, self.entry):
-            limits[label.cget("text")] = entry.get()
-        if not shared.config_manager.validate_limits(limits):
-            messagebox.showerror("Validation Error", f"Invalid values in {self.label.cget('text')} section. Minutes must be 0-1440, times must be HH:MM format")
-            return "Error"
-        return limits
+    def remove_person(self):
+        person = self.editor.person
+        if person and messagebox.askyesno("Remove person", f"Stop managing '{person}'?"):
+            self.config_data["users"].pop(person, None)
+            self.editor.person = None
+            self.select_person(None)
 
-class TabLabel4SecondWindow(customtkinter.CTkLabel):
-    def __init__(self, master, text):
-        super().__init__(master, text=text, font=customtkinter.CTkFont(size=13, weight="normal"))
+    # ----- load / save ---------------------------------------------------------------------
+    def reload(self, quiet: bool = False):
+        self.limits_loaded = False
+        try:
+            self.config_data = self.session.load()
+        except StoreError as e:
+            self.status.configure(text=f"Not connected: {self.session.describe()}  (see the Connection tab)")
+            self.tabs.set("Connection")
+            self._tab_changed()
+            if not quiet:
+                messagebox.showerror("Network store unreachable",
+                                     f"Cannot load the limits:\n{e}\n\nCheck the settings on the Connection tab.")
+            return
+        except ConfigError as e:
+            self.status.configure(text=f"Invalid configuration in {self.session.describe()}")
+            messagebox.showerror("Invalid configuration", f"The stored configuration is invalid:\n{e}")
+            return
+        self.limits_loaded = True
+        revision = self.session.loaded_revision
+        self.status.configure(text=f"Store: {self.session.describe()}   |   revision: "
+                                   f"{revision if revision is not None else 'none yet'}")
+        self._show_loaded()
 
-class UserSettingsFrame4SecondWindow(customtkinter.CTkFrame):
-    def __init__(self, master, frame_title, limits_values):
-        super().__init__(master)
-        self.label1 = customtkinter.CTkLabel(self, text=frame_title, font=customtkinter.CTkFont(size=18, weight="bold"))
-        self.label1.grid(row=0, column=0, padx=0, pady=(0, 0), sticky="wn")
-        self.label2 = customtkinter.CTkLabel(self, text="Configuration level:", font=customtkinter.CTkFont(size=13, weight="normal"))
-        self.label2.grid(row=1, column=0, padx=0, pady=(0, 0), sticky="wn")
-        self.selected_radiobutton = customtkinter.StringVar(value="")
-        for limit in limits_values:
-            radioButton = RadioButton4SecondWindow(self, text=limit["Name"], on_radiobutton_selected=self.on_radiobutton_selected, variable=self.selected_radiobutton, value=limit["Name"])
-            radioButton.grid(row=limits_values.index(limit)+2, column=0, padx=0, pady=0, sticky="w")
-        #Create frame for limits that will be shown when "Inherit defaults only" is selected and hidden by default
-        
-        #Create frame for limits that will be shown when "Custom weekday / weekend" is selected and hidden by default
-        self.inherit_defaults_frame1 = LimitsFrame4SecondWindow(self, "Weekday", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}])
-        self.inherit_defaults_frame2 = LimitsFrame4SecondWindow(self, "Weekend", [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}])
-        self.day_overrides_frame = DayOverridesFrame4SecondWindow(self, "Day overrides (optional)")
-        
-        #Create frame for limits that will be shown when "Per-day overrides" is selected and hidden by default
-        self.per_day_overrides_frame = PerDayOverridesFrame4SecondWindow(self)
+    def _show_loaded(self):
+        """Fill every limits tab from self.config_data."""
+        for name, row in self.default_rows.items():
+            row.set(self.config_data.get("defaults", {}).get(name))
+        settings = {**DEFAULT_SETTINGS, **self.config_data.get("settings", {})}
+        for key, entry in self.setting_entries.items():
+            entry.delete(0, "end")
+            entry.insert(0, str(settings[key]))
+        self.log_level.set(settings["log_level"])
+        self.editor.person = None
+        self.select_person(None)
 
-    def on_radiobutton_selected(self):
-        selected_option = self.selected_radiobutton.get()
-        if selected_option == "Inherit defaults only":
-            # Handle the case when "Inherit defaults only" is selected
-            self.inherit_defaults_frame1.grid_remove()
-            self.inherit_defaults_frame2.grid_remove()
-            self.day_overrides_frame.grid_remove()
-            self.per_day_overrides_frame.grid_remove()
-        elif selected_option == "Custom weekday / weekend":
-            # Handle the case when "Custom weekday / weekend" is selected
-            self.inherit_defaults_frame1.grid(row=5, column=0, padx=0, pady=20, sticky="nsew")
-            self.inherit_defaults_frame2.grid(row=6, column=0, padx=0, pady=20, sticky="nsew")
-            self.day_overrides_frame.grid(row=7, column=0, padx=20, pady=0, sticky="nsew")
-            self.per_day_overrides_frame.grid_remove()
-        elif selected_option == "Per-day overrides":
-            # Handle the case when "Per-day overrides" is selected
-            self.inherit_defaults_frame1.grid_remove()
-            self.inherit_defaults_frame2.grid_remove()
-            self.day_overrides_frame.grid_remove()
-            self.per_day_overrides_frame.grid(row=5, column=0, padx=0, pady=20, sticky="nsew")
+    def import_file(self):
+        """Load limits from a limits.toml (also from version 1.x) into the window; Save stores them."""
+        if not self.limits_loaded:
+            messagebox.showwarning("Not loaded", "Fix the connection and reload first, so the import can be saved.")
+            return
+        name = filedialog.askopenfilename(title="Import limits", filetypes=[("Limits", "*.toml"), ("All files", "*.*")])
+        if not name:
+            return
+        try:
+            imported = parse_config(Path(name).read_bytes())
+        except (OSError, ConfigError) as e:
+            messagebox.showerror("Import failed", f"{name} cannot be used:\n{e}")
+            return
+        imported["revision"] = self.config_data.get("revision", 0)
+        self.config_data = imported
+        self._show_loaded()
+        messagebox.showinfo("Imported", f"Limits loaded from {Path(name).name}. Check them, then press Save limits.")
 
-    def get_user_limits(self):
-        selected_option = self.selected_radiobutton.get()
-        limits = {}
-        if selected_option == "Inherit defaults only":
-            limits["Configuration level"] = "Inherit defaults only"
-        elif selected_option == "Custom weekday / weekend":
-            limits["Configuration level"] = "Custom weekday / weekend"
-            limits["Weekday"] = self.inherit_defaults_frame1.get_limits()
-            limits["Weekend"] = self.inherit_defaults_frame2.get_limits()
-            day_overrides = {}
-            for day, frame in self.day_overrides_frame.day_frames.items():
-                day_limits = frame.limits.get_limits()
-                if any(value != "" for value in day_limits.values()):
-                    day_overrides[day] = day_limits
-            limits["Day overrides"] = day_overrides
-        elif selected_option == "Per-day overrides":
-            limits["Configuration level"] = "Per-day overrides"
-            limits["Per-day overrides"] = self.per_day_overrides_frame.get_limits()
-        if "Error" in limits.values():
-            return "Error"
-        return limits
+    def _collect(self) -> dict:
+        self._commit_editor()
+        config = copy.deepcopy(self.config_data)
+        config["defaults"] = {n: r.get() for n, r in self.default_rows.items() if r.get()}
+        settings = {}
+        for key, entry in self.setting_entries.items():
+            text = entry.get().strip()
+            value = int(text) if text.isdigit() else text
+            if value != DEFAULT_SETTINGS[key]:
+                settings[key] = value
+        if self.log_level.get() != DEFAULT_SETTINGS["log_level"]:
+            settings["log_level"] = self.log_level.get()
+        if settings:
+            config["settings"] = settings
+        else:
+            config.pop("settings", None)
+        return config
 
-class RadioButton4SecondWindow(customtkinter.CTkRadioButton):
-    def __init__(self, master, text, on_radiobutton_selected, variable, value):
-        super().__init__(master, text=text, command=lambda: on_radiobutton_selected(), variable=variable, value=value)
-
-class DayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
-    def __init__(self, master, frame_title):
-        super().__init__(master)
-        self.label = customtkinter.CTkLabel(self, text=frame_title, font=customtkinter.CTkFont(size=18, weight="normal"))
-        self.label.grid(row=0, column=0, padx=0, pady=(0, 0), sticky="wn", columnspan =7)
-        self.button_selected = None
-        self.buttons = {}
-        days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-        self.day_frames = {}
-        for day in days:
-            self.day_frames[day] = customtkinter.CTkFrame(self)
-            self.day_frames[day].limits = LimitsFrame4SecondWindow(self.day_frames[day], day.capitalize(), [{"Name": "Max minutes"}, {"Name": "Earliest login"}, {"Name": "Latest login"}], padx=0) 
-            self.day_frames[day].limits.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
-            button = customtkinter.CTkButton(self, text=day, width=45, height=28, command=lambda d=day: self.DayButtonCallback(d))
-            button.grid(row=1, column=days.index(day), padx=0, pady=1, sticky="w")
-            self.buttons[day] = button
-            
-    def DayButtonCallback(self, day):
-        self.button_selected = day
-        # Highlight buttons
-        for d, button in self.buttons.items():
-            if d == day:
-                button.configure(fg_color=button.cget("hover_color"))
-            else:
-                button.configure(fg_color="grey")
-        # Show/hide day frames
-        for d, frame in self.day_frames.items():
-            if d == day:
-                frame.grid(row=2, column=0, padx=0, pady=0, sticky="nsew", columnspan=7)
-            else:
-                frame.grid_remove()
-
-class PerDayOverridesFrame4SecondWindow(customtkinter.CTkFrame):
-    def __init__(self, master, frame_title=None):
-        super().__init__(master)
-        self.label1 = customtkinter.CTkLabel(self, text=None, font=customtkinter.CTkFont(size=15, weight="normal"))
-        self.label1.grid(row=0, column=0, padx=0, pady=(0, 0), sticky="wn")
-        self.label2 = customtkinter.CTkLabel(self, text="Max minutes", font=customtkinter.CTkFont(size=15, weight="normal"))
-        self.label2.grid(row=0, column=1, padx=0, pady=(0, 0), sticky="wn")
-        self.label3 = customtkinter.CTkLabel(self, text="Earliest login", font=customtkinter.CTkFont(size=15, weight="normal"))
-        self.label3.grid(row=0, column=2, padx=0, pady=(0, 0), sticky="wn")
-        self.label4 = customtkinter.CTkLabel(self, text="Latest login", font=customtkinter.CTkFont(size=15, weight="normal"))
-        self.label4.grid(row=0, column=3, padx=0, pady=(0, 0), sticky="wn")
-        self.labels = {}
-        self.entry = {}
-        days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        for day in days:
-            self.labels[day] = customtkinter.CTkLabel(self, text=day, font=customtkinter.CTkFont(size=13, weight="normal"))
-            self.labels[day].grid(row=days.index(day)+1, column=0, padx=0, pady=0, sticky="wn")
-            self.entry[day] = {}
-            self.entry[day]["Max minutes"] = customtkinter.CTkEntry(self)
-            self.entry[day]["Max minutes"].grid(row=days.index(day)+1, column=1, padx=0, pady=0, sticky="wn")
-            self.entry[day]["Earliest login"] = customtkinter.CTkEntry(self)
-            self.entry[day]["Earliest login"].grid(row=days.index(day)+1, column=2, padx=0, pady=0, sticky="wn")
-            self.entry[day]["Latest login"] = customtkinter.CTkEntry(self)
-            self.entry[day]["Latest login"].grid(row=days.index(day)+1, column=3, padx=0, pady=0, sticky="wn")
-    
-    def get_limits(self):
-        limits = {}
-        for day, entries in self.entry.items():
-            day_limits = {}
-            for limit_name, entry in entries.items():
-                day_limits[limit_name] = entry.get()
-            if any(value != "" for value in day_limits.values()):
-                if not shared.config_manager.validate_limits(day_limits):
-                    messagebox.showerror("Validation Error", f"Invalid values in {day} section. Minutes must be 0-1440, times must be HH:MM format")
-                    return "Error"
-            limits[day] = day_limits
-        return limits
+    def save(self):
+        if not self.limits_loaded:
+            messagebox.showwarning("Not loaded", "The limits could not be loaded, so they cannot be saved. "
+                                                 "Fix the connection first, then press Reload.")
+            return
+        config = self._collect()
+        errors = validate_config(config)
+        if errors:
+            messagebox.showerror("Please correct", "\n".join(errors[:15]))
+            return
+        try:
+            revision = self.session.save(config)
+        except RevisionConflict as e:
+            messagebox.showwarning("Changed elsewhere", str(e))
+            return
+        except (StoreError, ConfigError) as e:
+            messagebox.showerror("Save failed", str(e))
+            return
+        self.config_data = config
+        self.config_data["revision"] = revision
+        self.status.configure(text=f"Store: {self.session.describe()}   |   revision: {revision} (saved)")
+        messagebox.showinfo("Saved", f"Configuration saved as revision {revision}. Trackers pick it up "
+                                     "within one check interval.")

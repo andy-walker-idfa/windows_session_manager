@@ -1,0 +1,5 @@
+-r requirements.txt
+pyinstaller>=6.0
+pytest>=8.0
+wsgidav>=4.3
+cheroot>=10.0

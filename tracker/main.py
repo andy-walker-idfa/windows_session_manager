@@ -1,66 +1,78 @@
-#Script which suppose to be executed every configured period of time, check what users are logged in
-#check if they are managed by our program and if they are, it will check how much time they have spent today
-#and if they have exceeded their limit, it will log them out. It is expected to be run with appropriate permissions to be able to log out users.
+"""Tracker entry point: runs forever as a SYSTEM / root service, one cycle per check interval."""
 
-import shared.config_manager as config_manager
-import shared.usage_manager as usage_manager
-import shared.defaults as defaults
-import win32ts
-import datetime
+import argparse
 import logging
-import wmi
+import time
+from pathlib import Path
 
-def main():
+from platforms import get_platform, os_name
+from shared import defaults
+from shared.instance import (InstanceError, build_remote_store, instance_mtime, load_instance,
+                             load_writer_identity)
+from shared.logging_setup import configure_logging
+from storage.folder import FolderStore
+from tracker.cycle import Tracker
+from tracker.sync import Repository
 
-    #Get all users who are currently logged in
-    try:
-        sessions = win32ts.WTSEnumerateSessions(win32ts.WTS_CURRENT_SERVER_HANDLE)
-    except Exception as e:
-        logging.error(f"Error enumerating sessions: {e}")
-        exit(1)
-    c = wmi.WMI()
-    logonui = c.Win32_Process(Name="LogonUI.exe")
-    locked_sessions = [int(p.SessionId) for p in logonui]
-    active_users = [{"User": win32ts.WTSQuerySessionInformation(win32ts.WTS_CURRENT_SERVER_HANDLE,session['SessionId'],win32ts.WTSUserName), "SessionID": session['SessionId']} for session in sessions if session['State'] == 0]
-    active_users = [user for user in active_users if user['SessionID'] not in locked_sessions]
+SEED_CONFIG = "seed-limits.toml"
+RETRY_SECONDS = 60
 
-    #For each active user, check if they are managed by our program
-    managed_users = list(config_manager.load_config().get("users", {}))
-    logging.debug(f"Using configuration file {config_manager.get_config_path()}, managed users: {managed_users or 'none'}")
-    if not managed_users:
-        logging.warning(f"No users are configured in {config_manager.get_config_path()}, nothing will be enforced. Run the configurator to set limits.")
-    time_now = datetime.datetime.now().strftime("%H:%M")
-    for user in active_users:
-        logging.debug(f"Checking user {user['User']} with session ID {user['SessionID']}")
-        #get_user_config returns None for a user we do not manage and an empty dict for a user who is
-        #listed but has no limits of their own, so compare against None. An empty entry still resolves
-        #through get_effective_limits to the global defaults instead of being silently skipped.
-        user_config = config_manager.get_user_config(user["User"])
-        if user_config is not None:
-            if not user_config:
-                logging.warning(f"User {user['User']} is listed in the configuration file but has no limits of their own, falling back to global defaults.")
-            user_effective_limits = config_manager.get_effective_limits(user["User"])
-            logging.debug(f"Effective limits for {user['User']}: {user_effective_limits}")
-            #If they are check if login is allowed at this time. If not, log them out.
-            if time_now < user_effective_limits.get("earliest_login", "00:00") \
-            or time_now > user_effective_limits.get("latest_login", "23:59"):
-                try:
-                    win32ts.WTSLogoffSession(win32ts.WTS_CURRENT_SERVER_HANDLE, user["SessionID"], False)
-                    logging.info(f"User {user['User']} has been logged out due to login time restrictions.")
-                    continue
-                except Exception as e:
-                    logging.error(f"Error logging out user {user['User']}: {e}")
-            #Add service_check_interval to their time spent today                        
-            usage_manager.add_user_today_usage(user["User"],defaults.service_check_interval)
-            #Check if they have exceeded their limit, if they have, log them out
-            #read_user_today_usage returns a (minutes, timestamp) pair, we only need the minutes here
-            today_usage, _ = usage_manager.read_user_today_usage(user["User"])
-            limit_minutes = user_effective_limits.get("limit_minutes", 1440)
-            if today_usage is not None and today_usage > limit_minutes:
-                try:
-                    win32ts.WTSLogoffSession(win32ts.WTS_CURRENT_SERVER_HANDLE, user["SessionID"], False)
-                    logging.info(f"User {user['User']} has been logged out due to time spent restrictions.")
-                    logging.info(f"User {user['User']} has spent today {today_usage} which is more than configured limit of {limit_minutes}")
-                    continue
-                except Exception as e:
-                    logging.error(f"Error logging out user {user['User']}: {e}")
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description=f"{defaults.app_name} tracker {defaults.__version__}")
+    parser.add_argument("--root", type=Path, help="install folder holding instance.toml (default: auto)")
+    parser.add_argument("--once", action="store_true", help="run a single cycle and exit")
+    parser.add_argument("--dry-run", action="store_true", help="log decisions but never log anyone off")
+    return parser.parse_args(argv)
+
+
+def build_tracker(root: Path, dry_run: bool) -> Tracker:
+    instance = load_instance(root)
+    configure_logging(instance.log_dir, "tracker")
+    logging.info(f"{defaults.app_name} tracker {defaults.__version__} starting, install folder {root}")
+    platform = get_platform()
+    local = FolderStore(instance.data_dir)
+    remote = build_remote_store(instance.remote)
+    logging.info(f"Local store: {local.describe()}; network store: {remote.describe() if remote else 'none'}")
+    identity = load_writer_identity(local, os_name(), platform.machine_id())
+    repo = Repository(local, remote, identity.writer_id)
+    # A seed placed by the installer, or the config of a 1.x installation, if nothing is cached yet.
+    for seed in (root / SEED_CONFIG, root / defaults.legacy_config_file):
+        repo.import_seed_config(seed)
+    return Tracker(platform, repo, identity, os_name(), dry_run=dry_run)
+
+
+def main(argv=None) -> int:
+    args = parse_args(argv)
+    root = (args.root or defaults.get_install_root()).resolve()
+    while True:
+        try:
+            tracker = build_tracker(root, args.dry_run)
+            break
+        except InstanceError as e:
+            configure_logging(root / "logs", "tracker")
+            logging.error(f"{e}. Fix instance.toml; retrying in {RETRY_SECONDS} s.")
+        except Exception:
+            logging.exception(f"Tracker failed to start; retrying in {RETRY_SECONDS} s.")
+        if args.once:
+            return 1
+        time.sleep(RETRY_SECONDS)
+
+    interval = 5
+    settings_mtime = instance_mtime(root)
+    while True:
+        # Connection settings saved in the configurator take effect at the next cycle.
+        if instance_mtime(root) != settings_mtime:
+            settings_mtime = instance_mtime(root)
+            try:
+                tracker = build_tracker(root, args.dry_run)
+                logging.info("instance.toml changed: reconnected with the new settings.")
+            except Exception:
+                logging.exception("instance.toml changed but cannot be used; keeping the previous settings.")
+        try:
+            interval = tracker.run_cycle().interval_minutes
+        except Exception:
+            logging.exception("Tracker cycle failed; trying again next cycle.")
+        if args.once:
+            return 0
+        time.sleep(interval * 60)
