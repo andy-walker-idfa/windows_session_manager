@@ -1,0 +1,5 @@
+requests>=2.31
+tomli_w>=1.0
+customtkinter==5.2.2   # pinned: the version the GUI is tested with
+pywin32>=306; sys_platform == "win32"
+wmi>=1.5; sys_platform == "win32"

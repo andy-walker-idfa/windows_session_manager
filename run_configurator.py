@@ -1,8 +1,6 @@
-from configurator.main import main
-import logging
-from shared import defaults
+import sys
 
+from configurator.main import main
 
 if __name__ == "__main__":
-    defaults.configure_logging()
-    main()
+    sys.exit(main())

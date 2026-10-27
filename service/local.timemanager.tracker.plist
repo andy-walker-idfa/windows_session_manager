@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- LaunchDaemon for the Time Manager tracker (macOS). See README.md, "Service (macOS)".
+     Install: sudo cp local.timemanager.tracker.plist /Library/LaunchDaemons/
+              sudo chown root:wheel /Library/LaunchDaemons/local.timemanager.tracker.plist
+              sudo chmod 644 /Library/LaunchDaemons/local.timemanager.tracker.plist
+              sudo launchctl bootstrap system /Library/LaunchDaemons/local.timemanager.tracker.plist -->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>local.timemanager.tracker</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/timemanager/tracker/tracker</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>
