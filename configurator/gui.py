@@ -168,6 +168,21 @@ class ConfiguratorApp(customtkinter.CTk):
         if startup_warning:
             self.after(200, lambda: messagebox.showwarning("Connection settings", startup_warning))
         self.after(50, self.reload)
+        self.after(20, self._fit_to_content)
+
+    def _fit_to_content(self):
+        """Open large enough to show the whole People tab, whatever the font size and display scaling,
+        but never larger than the screen. (A fixed size cut off the content on scaled Linux desktops.)"""
+        self.update_idletasks()
+        scale = customtkinter.ScalingTracker.get_window_scaling(self)
+        # Pixels the content needs: people list + the person editor's content, plus margins, tab
+        # header, status line and buttons (those parts are measured in unscaled design units).
+        need_w = self._people_left.winfo_reqwidth() + self.editor.winfo_reqwidth() + int(110 * scale)
+        need_h = self.editor.winfo_reqheight() + int(270 * scale)
+        max_w, max_h = int(self.winfo_screenwidth() * 0.92), int(self.winfo_screenheight() * 0.88)
+        width = min(max(need_w, int(820 * scale)), max_w)
+        height = min(max(need_h, int(760 * scale)), max_h)
+        self.geometry(f"{round(width / scale)}x{round(height / scale)}")  # geometry() takes unscaled units
 
     def _tab_changed(self):
         # Reload / Save limits only belong to the tabs that edit limits.
@@ -192,7 +207,7 @@ class ConfiguratorApp(customtkinter.CTk):
     def _build_people(self, tab):
         tab.grid_columnconfigure(1, weight=1)
         tab.grid_rowconfigure(0, weight=1)
-        left = customtkinter.CTkFrame(tab)
+        left = self._people_left = customtkinter.CTkFrame(tab)
         left.grid(row=0, column=0, sticky="ns", padx=(0, 8))
         left.grid_rowconfigure(0, weight=1)
         self.people_list = customtkinter.CTkScrollableFrame(left, width=180)
