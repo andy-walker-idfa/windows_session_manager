@@ -3,7 +3,7 @@
 Parental control for computer time: daily limits and allowed login hours per person, enforced
 on **Windows, Linux and macOS**, with one shared daily total across all computers and OSs.
 
-Current version: **2.0.0**. See [CHANGELOG.md](CHANGELOG.md).
+Current version: **2.1.0**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## How it works
 
@@ -13,7 +13,9 @@ service. Every few minutes the tracker:
 1. Lists the active, unlocked desktop sessions. Locked screens and switched-away sessions do not count.
 2. Maps each account to a **person** from the configuration. Accounts that don't belong to a person
    are ignored and not recorded.
-3. Logs the person off if the time is outside their allowed login hours.
+3. Logs the person off if the time is outside their allowed login hours. Between these checks,
+   new logins are checked every 20 seconds, so someone who logs in while already over the limit
+   or outside the hours is logged off at once.
 4. Adds the elapsed time to this installation's usage record for today. It writes locally first,
    then copies the record to the network store.
 5. Adds up the person's minutes from **all** installations and logs them off when the daily limit
@@ -26,6 +28,7 @@ service. Every few minutes the tracker:
              └───────────────────┴─────────────────────┴──►  network store (WebDAV over HTTPS)
                                                               config/limits.toml
                                                               records/<installation>/<date>.json
+                                                              events/<installation>/<date>.jsonl
                                                               writers/<installation>.json
 ```
 
@@ -37,6 +40,12 @@ person's own limits and the global defaults. Records are uploaded once the store
 Every tracker downloads it each cycle and only uses it after checking that it is valid, so a
 broken file never replaces a working one. Each installation also keeps a local copy for offline
 use. A revision number stops two people from overwriting each other's changes.
+
+**Shared activity log.** Next to its local log file, every tracker keeps a journal of what happened
+to managed people on that computer: session counted, screen locked, user switched, close to the
+limit, logged off and why, offline and back. It is uploaded together with the usage records, so the
+configurator's **Activity** tab can show, for any day, the minutes per person **per computer** and
+one combined timeline of all computers, and export both as CSV.
 
 ### Limits
 
@@ -167,6 +176,9 @@ root to open windows with `xhost +si:localuser:root`.
   same child has a different account name on another computer. Blank fields inherit.
 - **Defaults:** the limits that apply to everyone. They are also the offline limits.
 - **Settings:** the check interval, how many days of history to keep, and the log level.
+- **Activity:** choose a day to see the minutes per person on each computer, with the total and
+  the limit, and the combined timeline of all computers (in local time). **Export CSV…** saves
+  both, for a spreadsheet or your own reports.
 - **Import from file…** loads a `limits.toml`, for example from version 1.x; press **Save limits**
   to store it.
 

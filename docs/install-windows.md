@@ -33,7 +33,7 @@ Run commands in **PowerShell as administrator** (right-click Start → *Terminal
 
 ## 2. Bring the program over
 
-On the first computer, `build.py` produced `dist\TimeManager-2.0.0-windows.zip`. Copy it to this
+On the first computer, `build.py` produced `dist\TimeManager-<version>-windows.zip`. Copy it to this
 computer (USB stick or network share).
 
 1. If the zip came by browser, e-mail or cloud storage: right-click it → *Properties* → tick
@@ -98,7 +98,7 @@ Get-Content "C:\Program Files\TimeManager\logs\tracker.log" -Tail 20 -Wait     #
 Expected:
 
 ```
-... INFO - Time Manager tracker 2.0.0 starting, install folder C:\Program Files\TimeManager
+... INFO - Time Manager tracker <version> starting, install folder C:\Program Files\TimeManager
 ... INFO - Local store: folder C:\Program Files\TimeManager\data; network store: WebDAV https://nas.home.arpa:30036/timemanager/
 ... INFO - Writer id for this installation: <new id>
 ```

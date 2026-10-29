@@ -16,6 +16,8 @@ from tracker.sync import Repository
 
 SEED_CONFIG = "seed-limits.toml"
 RETRY_SECONDS = 60
+# How often a new login is checked between full cycles (logs off at once if over the limit).
+QUICK_CHECK_SECONDS = 20
 
 
 def parse_args(argv=None):
@@ -75,4 +77,19 @@ def main(argv=None) -> int:
             logging.exception("Tracker cycle failed; trying again next cycle.")
         if args.once:
             return 0
-        time.sleep(interval * 60)
+        wait_for_next_cycle(tracker, interval * 60)
+
+
+def wait_for_next_cycle(tracker, seconds: float) -> None:
+    """Sleep until the next full cycle, running the quick login check every QUICK_CHECK_SECONDS."""
+    deadline = time.monotonic() + seconds
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        time.sleep(min(QUICK_CHECK_SECONDS, remaining))
+        if deadline - time.monotonic() > QUICK_CHECK_SECONDS / 2:
+            try:
+                tracker.quick_check()
+            except Exception:
+                logging.exception("Quick login check failed; the next full cycle checks again.")

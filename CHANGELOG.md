@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-10-29
+
+### Added
+
+- **Shared activity log.** Every installation keeps a journal of what happened to managed people on
+  that computer: session counted, screen locked, user switched, close to the limit, logged off and why,
+  offline and back online. Journals are stored next to the usage records
+  (`events/<installation>/<date>.jsonl`), uploaded in the same cycle, kept locally while offline and
+  removed after the retention period. Local log files are unchanged.
+- **Activity tab in the configurator.** For any day: minutes per person per computer, with the total
+  and the limit, and one combined timeline of all computers. **Export CSV…** saves both.
+- **Quick login check.** Between the regular cycles, new logins are checked every 20 seconds. A managed
+  person who logs in while over the daily limit, or outside the allowed hours, is logged off at once
+  instead of within the next cycle, which makes separate logon scripts unnecessary.
+
+### Fixed
+
+- Names in the configurator's people list were nearly invisible in light mode unless selected.
+
 ## [2.0.0] - 2026-10-26
 
 Rewritten for several computers and operating systems sharing one daily total.
