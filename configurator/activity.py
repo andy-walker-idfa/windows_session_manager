@@ -60,8 +60,9 @@ class ActivityFrame(customtkinter.CTkFrame):
         self.results: queue.Queue = queue.Queue()
         self.loaded = None  # (date, computers, rows, events)
         self.grid_columnconfigure(0, weight=1)
-        self.grid_rowconfigure(4, weight=1)
         mono = customtkinter.CTkFont(family="Courier", size=13)
+        heading = customtkinter.CTkFont(weight="bold")
+        hint_color = ("gray35", "gray65")
 
         bar = customtkinter.CTkFrame(self, fg_color="transparent")
         bar.grid(row=0, column=0, sticky="w", pady=(4, 6))
@@ -77,16 +78,22 @@ class ActivityFrame(customtkinter.CTkFrame):
 
         self.status = customtkinter.CTkLabel(self, text="", anchor="w")
         self.status.grid(row=1, column=0, sticky="w")
-        customtkinter.CTkLabel(self, text="Minutes per computer", anchor="w",
-                               font=customtkinter.CTkFont(weight="bold")).grid(row=2, column=0, sticky="w", pady=(6, 0))
-        self.usage = customtkinter.CTkTextbox(self, height=130, font=mono, wrap="none")
-        self.usage.grid(row=3, column=0, sticky="ew")
-        timeline_label = customtkinter.CTkLabel(self, text="Activity on all computers (local time)", anchor="w",
-                                                font=customtkinter.CTkFont(weight="bold"))
-        timeline_label.grid(row=4, column=0, sticky="nw", pady=(10, 0))
+        # Each box has its heading and a one-line explanation directly above it.
+        customtkinter.CTkLabel(self, text="Time used per computer", anchor="w",
+                               font=heading).grid(row=2, column=0, sticky="w", pady=(10, 0))
+        customtkinter.CTkLabel(self, text="Minutes each person used on this day on each computer, their total, "
+                                          "and their daily limit.", anchor="w",
+                               text_color=hint_color).grid(row=3, column=0, sticky="w")
+        self.usage = customtkinter.CTkTextbox(self, height=120, font=mono, wrap="none")
+        self.usage.grid(row=4, column=0, sticky="ew", pady=(2, 0))
+        customtkinter.CTkLabel(self, text="Timeline of all computers", anchor="w",
+                               font=heading).grid(row=5, column=0, sticky="w", pady=(16, 0))
+        customtkinter.CTkLabel(self, text="What happened on this day, oldest first, in local time: sessions counted, "
+                                          "screens locked, warnings, logoffs and why.", anchor="w",
+                               text_color=hint_color).grid(row=6, column=0, sticky="w")
         self.timeline = customtkinter.CTkTextbox(self, font=mono, wrap="none")
-        self.timeline.grid(row=5, column=0, sticky="nsew")
-        self.grid_rowconfigure(5, weight=1)
+        self.timeline.grid(row=7, column=0, sticky="nsew", pady=(2, 0))
+        self.grid_rowconfigure(7, weight=1)  # only the timeline grows with the window
         self.date.insert(0, datetime.date.today().isoformat())
 
     # ----- loading -------------------------------------------------------------------------
@@ -152,7 +159,10 @@ class ActivityFrame(customtkinter.CTkFrame):
 
         computer_w = max([8] + [len(e.get("computer", "")) for e in events]) + 2
         timeline = [f"{local_time(e):%H:%M:%S}  {e.get('computer', '').ljust(computer_w)}{describe(e)}" for e in events]
-        self._set_text(self.timeline, "\n".join(timeline) or "(no events recorded on this day)")
+        self._set_text(self.timeline, "\n".join(timeline) or
+                       "(no events recorded on this day)\n\nEvents are recorded by trackers of version 2.1 or newer, "
+                       "from the moment they are installed.\nComputers still running 2.0 add minutes to the table "
+                       "above, but nothing to this timeline.")
         self.status.configure(text=f"{date}: {len(computers)} computer(s), {len(events)} event(s).")
 
     @staticmethod
