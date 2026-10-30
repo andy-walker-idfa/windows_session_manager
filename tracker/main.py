@@ -87,8 +87,12 @@ def wait_for_next_cycle(tracker, seconds: float) -> None:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return
-        time.sleep(min(QUICK_CHECK_SECONDS, remaining))
-        if deadline - time.monotonic() > QUICK_CHECK_SECONDS / 2:
+        pause = min(QUICK_CHECK_SECONDS, remaining)
+        signout = tracker.seconds_until_next_signout()
+        if signout is not None:  # a refused login is due to be signed out: wake up in time for it
+            pause = min(pause, signout + 0.5)
+        time.sleep(pause)
+        if signout is not None or deadline - time.monotonic() > QUICK_CHECK_SECONDS / 2:
             try:
                 tracker.quick_check()
             except Exception:

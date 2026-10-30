@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-30
+
+### Added
+
+- **The child is told why a sign-in is not allowed.** When someone signs in while their time for the
+  day is used up, or outside the allowed hours, a message explains why ("Your time for today is used
+  up (90 of 90 minutes)" or "Signing in is allowed between 08:00 and 20:00") and they are signed out
+  15 seconds later. Previously the sign-out came without explanation. Windows shows a message box,
+  Linux a desktop notification (GNOME, KDE), macOS a dialog. The shared activity log records
+  `login_refused` and then `logged_off`.
+
 ## [2.1.0] - 2026-10-30
 
 ### Added

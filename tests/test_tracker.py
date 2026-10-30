@@ -26,12 +26,16 @@ class FakePlatform:
     def __init__(self, *sessions):
         self.sessions = list(sessions)
         self.logged_off = []
+        self.notices = []  # (account, message)
 
     def get_sessions(self):
         return [s for s in self.sessions if s not in self.logged_off]
 
     def log_off(self, session):
         self.logged_off.append(session)
+
+    def notify(self, session, title, message, seconds):
+        self.notices.append((session.account, message))
 
 
 class FlakyStore(FolderStore):
@@ -114,11 +118,16 @@ def test_locked_inactive_and_unmanaged_sessions_are_not_counted(tmp_path, nas):
     assert tracker.repo.local.get(record_key("pc", DAY.isoformat()), 10_000) is None
 
 
-def test_outside_login_hours_logs_off_without_credit(tmp_path, nas):
-    tracker, platform, _ = make(tmp_path, "pc", nas, sam(), clock=Clock(hour=7, minute=30))
+def test_outside_login_hours_tells_why_then_logs_off_without_credit(tmp_path, nas):
+    clock = Clock(hour=7, minute=30)
+    tracker, platform, _ = make(tmp_path, "pc", nas, sam(), clock=clock)
     result = tracker.run_cycle()
-    assert result.credited == {} and platform.logged_off
-    assert "login hours" in result.logged_off[0][1]
+    assert result.credited == {} and not platform.logged_off
+    assert "between 08:00 and 21:00" in platform.notices[0][1]
+    clock.mono += 16  # after the notice period
+    result = tracker.quick_check()
+    assert platform.logged_off and "login hours" in result.logged_off[0][1]
+    assert len(platform.notices) == 1  # told once, not on every check
 
 
 def test_offline_uses_cache_and_stricter_defaults_then_pushes(tmp_path, nas):
