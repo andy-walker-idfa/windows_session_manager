@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox
 
 import customtkinter
 
+from configurator.activity import ActivityFrame
 from configurator.connection import ConnectionFrame
 from configurator.session import ConfigSession, RevisionConflict
 from core.config import DAYS, DEFAULT_SETTINGS, LOG_LEVELS, ConfigError, parse_config, validate_config
@@ -137,11 +138,18 @@ class ConfiguratorApp(customtkinter.CTk):
 
         self.tabs = tabs = customtkinter.CTkTabview(self, anchor="nw", command=self._tab_changed)
         tabs.grid(row=1, column=0, padx=16, pady=8, sticky="nsew")
-        for name in ("People", "Defaults", "Settings", "Connection"):
+        for name in ("People", "Defaults", "Settings", "Activity", "Connection"):
             tabs.add(name)
         self._build_people(tabs.tab("People"))
         self._build_defaults(tabs.tab("Defaults"))
         self._build_settings(tabs.tab("Settings"))
+        activity_tab = tabs.tab("Activity")
+        activity_tab.grid_columnconfigure(0, weight=1)
+        activity_tab.grid_rowconfigure(0, weight=1)
+        self.activity = ActivityFrame(activity_tab, lambda: self.session.store,
+                                      lambda: self.config_data if self.limits_loaded else None)
+        self.activity.grid(row=0, column=0, sticky="nsew")
+        self._activity_loaded = False
         connection_tab = tabs.tab("Connection")
         connection_tab.grid_columnconfigure(0, weight=1)
         connection_tab.grid_rowconfigure(0, weight=1)
@@ -160,15 +168,35 @@ class ConfiguratorApp(customtkinter.CTk):
         if startup_warning:
             self.after(200, lambda: messagebox.showwarning("Connection settings", startup_warning))
         self.after(50, self.reload)
+        self.after(20, self._fit_to_content)
+
+    def _fit_to_content(self):
+        """Open large enough to show the whole People tab, whatever the font size and display scaling,
+        but never larger than the screen. (A fixed size cut off the content on scaled Linux desktops.)"""
+        self.update_idletasks()
+        scale = customtkinter.ScalingTracker.get_window_scaling(self)
+        # Pixels the content needs: people list + the person editor's content, plus margins, tab
+        # header, status line and buttons (those parts are measured in unscaled design units).
+        need_w = self._people_left.winfo_reqwidth() + self.editor.winfo_reqwidth() + int(110 * scale)
+        need_h = self.editor.winfo_reqheight() + int(270 * scale)
+        max_w, max_h = int(self.winfo_screenwidth() * 0.92), int(self.winfo_screenheight() * 0.88)
+        width = min(max(need_w, int(820 * scale)), max_w)
+        height = min(max(need_h, int(760 * scale)), max_h)
+        self.geometry(f"{round(width / scale)}x{round(height / scale)}")  # geometry() takes unscaled units
 
     def _tab_changed(self):
-        if self.tabs.get() == "Connection":
+        # Reload / Save limits only belong to the tabs that edit limits.
+        if self.tabs.get() in ("Connection", "Activity"):
             self.limit_buttons.grid_remove()
         else:
             self.limit_buttons.grid()
+        if self.tabs.get() == "Activity" and not self._activity_loaded:
+            self._activity_loaded = True  # load today's activity the first time the tab is opened
+            self.activity.load()
 
     def on_connection_saved(self, instance):
         self.session = ConfigSession(instance)
+        self._activity_loaded = False  # a new store has other activity
         self.reload(quiet=True)
         if self.limits_loaded and self.session.store_is_empty and messagebox.askyesno(
                 "Empty network store",
@@ -179,7 +207,7 @@ class ConfiguratorApp(customtkinter.CTk):
     def _build_people(self, tab):
         tab.grid_columnconfigure(1, weight=1)
         tab.grid_rowconfigure(0, weight=1)
-        left = customtkinter.CTkFrame(tab)
+        left = self._people_left = customtkinter.CTkFrame(tab)
         left.grid(row=0, column=0, sticky="ns", padx=(0, 8))
         left.grid_rowconfigure(0, weight=1)
         self.people_list = customtkinter.CTkScrollableFrame(left, width=180)
@@ -223,6 +251,9 @@ class ConfiguratorApp(customtkinter.CTk):
             selected = person == self.editor.person
             customtkinter.CTkButton(self.people_list, text=person, anchor="w",
                                     fg_color=None if selected else "transparent",
+                                    # unselected names: normal text colour (white text vanished in light mode)
+                                    text_color=None if selected else ("gray10", "gray90"),
+                                    hover_color=None if selected else ("gray75", "gray30"),
                                     command=lambda p=person: self.select_person(p)).grid(row=i, column=0, sticky="ew", pady=1)
         mapped = {a.casefold() for p, e in self.config_data.get("users", {}).items()
                   for a in [p, *e.get("accounts", [])]}

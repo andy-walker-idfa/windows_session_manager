@@ -61,7 +61,7 @@ venv/bin/python -m pytest -q               # optional: all tests should pass
 venv/bin/python build.py
 ```
 
-The result is `~/timemanager-src/dist/linux/TimeManager/` and `dist/TimeManager-2.0.0-linux.zip`.
+The result is `~/timemanager-src/dist/linux/TimeManager/` and `dist/TimeManager-<version>-linux.zip`.
 
 ## 4. Check the store from Linux (optional, before installing)
 
@@ -125,7 +125,7 @@ sudo tail -f /opt/timemanager/logs/tracker.log
 Expected log, as on Windows:
 
 ```
-... INFO - Time Manager tracker 2.0.0 starting, install folder /opt/timemanager
+... INFO - Time Manager tracker <version> starting, install folder /opt/timemanager
 ... INFO - Local store: folder /opt/timemanager/data; network store: WebDAV https://nas.home.arpa:30036/timemanager/
 ... DEBUG - Cycle: online, 5.00 min to credit; sessions: <you> (active, not managed)
 ```

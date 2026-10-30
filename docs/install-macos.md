@@ -79,7 +79,7 @@ venv/bin/python -m pytest -q               # optional: all tests should pass
 venv/bin/python build.py
 ```
 
-The result is `~/timemanager-src/dist/macos/TimeManager/` and `dist/TimeManager-2.0.0-macos.zip`.
+The result is `~/timemanager-src/dist/macos/TimeManager/` and `dist/TimeManager-<version>-macos.zip`.
 
 ## 4. Check the store from macOS (optional, before installing)
 
@@ -150,7 +150,7 @@ Login Items & Extensions* (the entry may be shown as "tracker").
 Expected log, as on the other systems:
 
 ```
-... INFO - Time Manager tracker 2.0.0 starting, install folder /usr/local/timemanager
+... INFO - Time Manager tracker <version> starting, install folder /usr/local/timemanager
 ... INFO - Local store: folder /usr/local/timemanager/data; network store: WebDAV https://nas.home.arpa:30036/timemanager/
 ... DEBUG - Cycle: online, 5.00 min to credit; sessions: <you> (active, not managed)
 ```

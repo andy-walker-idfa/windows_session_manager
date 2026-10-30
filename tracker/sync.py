@@ -17,6 +17,7 @@ import datetime
 import json
 import logging
 
+from core.activity import MAX_EVENTS_BYTES, parse_events, serialize_events
 from core.config import ConfigError, MAX_CONFIG_BYTES, parse_config
 from core.usage import MAX_RECORD_BYTES, DailyRecord, NewerSchemaError, RecordError, parse_record, serialize_record
 from storage.base import Store, StoreError
@@ -35,6 +36,10 @@ def record_key(writer_id: str, date: str) -> str:
 
 def cache_record_key(writer_id: str, date: str) -> str:
     return f"cache/{record_key(writer_id, date)}"
+
+
+def events_key(writer_id: str, date: str) -> str:
+    return f"events/{writer_id}/{date}.jsonl"
 
 
 class Repository:
@@ -57,8 +62,8 @@ class Repository:
             return set(json.loads(data)) if data else set()
         except (StoreError, ValueError) as e:
             logging.warning(f"Unsent-records list is unreadable ({e}); all own records will be re-sent.")
-            return {f"records/{self.writer_id}/{name}" for name in self.local.list(f"records/{self.writer_id}")
-                    if name.endswith(".json")}
+            return {f"{kind}/{self.writer_id}/{name}" for kind in ("records", "events")
+                    for name in self.local.list(f"{kind}/{self.writer_id}") if name.endswith((".json", ".jsonl"))}
 
     def _save_dirty(self) -> None:
         self.local.put(DIRTY_KEY, json.dumps(sorted(self._dirty)).encode("utf-8"))
@@ -86,12 +91,27 @@ class Repository:
             self.save_own(record)
             return record
 
-    def save_own(self, record: DailyRecord) -> None:
-        key = record_key(record.writer_id, record.date)
-        self.local.put(key, serialize_record(record))
+    def _save_local(self, key: str, data: bytes) -> None:
+        """Write one of this installation's own files locally and queue it for upload."""
+        self.local.put(key, data)
         if self.remote is not None and key not in self._dirty:
             self._dirty.add(key)
             self._save_dirty()
+
+    def save_own(self, record: DailyRecord) -> None:
+        self._save_local(record_key(record.writer_id, record.date), serialize_record(record))
+
+    # ----- own event journal ---------------------------------------------------------------
+    def load_own_events(self, date: str) -> list[dict]:
+        try:
+            data = self.local.get(events_key(self.writer_id, date), MAX_EVENTS_BYTES)
+        except StoreError as e:
+            logging.warning(f"Event journal for {date} is unreadable ({e}); starting a new one.")
+            return []
+        return parse_events(data) if data else []
+
+    def save_own_events(self, date: str, events: list[dict]) -> None:
+        self._save_local(events_key(self.writer_id, date), serialize_events(events))
 
     def _restore_from_remote(self, record: DailyRecord) -> bool:
         """Merge this writer's network copy into record (per account maximum)."""
@@ -128,7 +148,7 @@ class Repository:
             return True
         for key in sorted(self._dirty):
             try:
-                data = self.local.get(key, MAX_RECORD_BYTES)
+                data = self.local.get(key, max(MAX_RECORD_BYTES, MAX_EVENTS_BYTES))
                 if data is not None:
                     self.remote.put(key, data)
             except StoreError as e:
@@ -269,27 +289,28 @@ class Repository:
                 logging.debug(f"Writer info not published: {e}")
 
     def prune(self, today: datetime.date, retention_days: int, online: bool) -> None:
-        """Delete own records older than the retention period and other writers' old cache files."""
+        """Delete own records and event journals older than the retention period, and other writers'
+        old cache files."""
         cut_off = today - datetime.timedelta(days=retention_days)
-        own_prefix = f"records/{self.writer_id}"
         stores = [self.local] + ([self.remote] if online and self.remote is not None else [])
-        for store in stores:
-            try:
-                names = store.list(own_prefix)
-            except StoreError as e:
-                logging.debug(f"Prune skipped for {store.describe()}: {e}")
-                continue
-            for name in names:
+        for own_prefix in (f"records/{self.writer_id}", f"events/{self.writer_id}"):
+            for store in stores:
                 try:
-                    day = datetime.date.fromisoformat(name.removesuffix(".json")[:10])
-                except ValueError:
+                    names = store.list(own_prefix)
+                except StoreError as e:
+                    logging.debug(f"Prune skipped for {store.describe()}: {e}")
                     continue
-                key = f"{own_prefix}/{name}"
-                if day < cut_off and key not in self._dirty:
+                for name in names:
                     try:
-                        store.delete(key)
-                    except StoreError as e:
-                        logging.debug(f"Could not delete {key}: {e}")
+                        day = datetime.date.fromisoformat(name[:10])
+                    except ValueError:
+                        continue
+                    key = f"{own_prefix}/{name}"
+                    if day < cut_off and key not in self._dirty:
+                        try:
+                            store.delete(key)
+                        except StoreError as e:
+                            logging.debug(f"Could not delete {key}: {e}")
         for writer in self.local.list("cache/records"):
             for name in self.local.list(f"cache/records/{writer}"):
                 if name != f"{today.isoformat()}.json":
