@@ -5,6 +5,40 @@ on **Windows, Linux and macOS**, with one shared daily total across all computer
 
 Current version: **2.2.0**. See [CHANGELOG.md](CHANGELOG.md).
 
+## Features
+
+- **One daily limit per child, across every computer and OS.** Minutes used on the desktop, the
+  laptop or the other OS of a multi-boot machine add up to one total.
+- **Allowed login hours and daily minutes**, for weekdays and weekends, with per-day exceptions.
+- **The same child under different account names** on different computers is recognised as one person.
+- **Configuration page:** one window to manage people, limits, the network store and installation
+  permissions, from any of the computers.
+- **Statistics:** for any day, the minutes per child on each computer, and one timeline of what
+  happened on all computers (sessions, locked screens, warnings, logoffs and why), exportable as CSV.
+- **The child is told why:** a sign-in that isn't allowed shows the reason before signing out.
+- **Works offline:** if the network store is unreachable, stricter offline limits apply and the
+  minutes are uploaded later.
+- **Your data stays at home:** usage is shared through your own WebDAV store (for example on a NAS),
+  over HTTPS with a password; nothing is sent anywhere else.
+
+### Screenshots
+
+**Configuration: people and their limits.** Blank fields use the defaults; *Other account names*
+link the child's accounts on other computers.
+
+![Configurator, People tab](docs/images/configurator-people.png)
+
+**Statistics: the Activity tab.** Minutes per child on each computer, and the combined timeline of
+all computers.
+
+![Configurator, Activity tab](docs/images/configurator-activity.png)
+
+**What a child sees** when signing in after the daily time is used up (Windows):
+
+![Sign-in message](docs/images/sign-in-notice.png)
+
+*All screenshots use demo data.*
+
 ## How it works
 
 Each computer, and each OS on a multi-boot computer, runs its own **tracker** as a SYSTEM/root
