@@ -198,7 +198,15 @@ class ConfiguratorApp(customtkinter.CTk):
         self.session = ConfigSession(instance)
         self._activity_loaded = False  # a new store has other activity
         self.reload(quiet=True)
-        if self.limits_loaded and self.session.store_is_empty and messagebox.askyesno(
+        if not self.limits_loaded:
+            # The connection IS saved; say so first, so the load problem is not mistaken for a failed save.
+            messagebox.showwarning("Connection saved, limits not loaded",
+                                   f"The connection settings were saved.\n\nBut the limits could not be loaded "
+                                   f"from this store. {self.load_error}\n\nCheck the URL (port and share name) "
+                                   f"with Test connection. Until the store works, this computer uses its last "
+                                   f"known limits (offline).")
+            return
+        if self.session.store_is_empty and messagebox.askyesno(
                 "Empty network store",
                 "The network store has no limits yet.\n\nUpload this computer's current limits to it?"):
             self.save()
@@ -299,10 +307,14 @@ class ConfiguratorApp(customtkinter.CTk):
 
     # ----- load / save ---------------------------------------------------------------------
     def reload(self, quiet: bool = False):
+        """Load the limits from the store. With quiet=True, problems are only kept in
+        self.load_error (the caller reports them), not shown as a message box."""
         self.limits_loaded = False
+        self.load_error = None
         try:
             self.config_data = self.session.load()
         except StoreError as e:
+            self.load_error = f"The store cannot be reached:\n{e}"
             self.status.configure(text=f"Not connected: {self.session.describe()}  (see the Connection tab)")
             self.tabs.set("Connection")
             self._tab_changed()
@@ -311,8 +323,10 @@ class ConfiguratorApp(customtkinter.CTk):
                                      f"Cannot load the limits:\n{e}\n\nCheck the settings on the Connection tab.")
             return
         except ConfigError as e:
-            self.status.configure(text=f"Invalid configuration in {self.session.describe()}")
-            messagebox.showerror("Invalid configuration", f"The stored configuration is invalid:\n{e}")
+            self.load_error = f"The store did not return a usable limits file:\n{e}"
+            self.status.configure(text=f"Limits not loaded from {self.session.describe()}  (see the Connection tab)")
+            if not quiet:
+                messagebox.showerror("Invalid configuration", f"The stored configuration is invalid:\n{e}")
             return
         self.limits_loaded = True
         revision = self.session.loaded_revision

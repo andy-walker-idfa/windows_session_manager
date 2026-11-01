@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   wrong port) is now explained: *Test connection* says the address answers without a password and is
   not the WebDAV share, and loading the limits says a web page came back instead of the configuration
   file, instead of a confusing TOML error.
+- After **Save connection**, a store whose limits can't be loaded no longer shows an error that looks
+  like the save failed. The settings are saved; one message says so and explains why the limits
+  weren't loaded.
 
 ## [2.1.0] - 2026-10-30
 
