@@ -192,7 +192,18 @@ run, from boot, as SYSTEM/root. You set this up yourself.
 
 #### Windows: scheduled task
 
-Create it in Task Scheduler (*Create Task…*, not *Create Basic Task*):
+**With the script** (in PowerShell as administrator; the script is in the install folder):
+
+```powershell
+cd "C:\Program Files\TimeManager"
+powershell -ExecutionPolicy Bypass -File .\create-scheduled-task.ps1           # create and start the task
+powershell -ExecutionPolicy Bypass -File .\create-scheduled-task.ps1 -Remove   # remove it again
+```
+
+It creates the task with exactly the settings below (and replaces an existing one of the same name).
+Options: `-TaskName`, `-TaskFolder` (e.g. `My`), `-TrackerPath`.
+
+**Or by hand** in Task Scheduler (*Create Task…*, not *Create Basic Task*):
 
 | Setting | Value | Why |
 |---|---|---|

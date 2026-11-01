@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   15 seconds later. Previously the sign-out came without explanation. Windows shows a message box,
   Linux a desktop notification (GNOME, KDE), macOS a dialog. The shared activity log records
   `login_refused` and then `logged_off`.
+- **`create-scheduled-task.ps1`** in the Windows build: creates the tracker's scheduled task with the
+  recommended settings in one step (or removes it with `-Remove`). Creating the task by hand, as
+  described in the README, remains possible.
 
 ### Fixed
 
