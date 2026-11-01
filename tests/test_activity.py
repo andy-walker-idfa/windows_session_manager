@@ -111,9 +111,40 @@ def test_quick_check_logs_off_a_new_login_over_the_limit(tmp_path, nas):
         laptop_clock.advance(5)
     pc.run_cycle()                         # nobody on the PC; learns today's usage
     platform.sessions = [sam()]            # Sam logs in on the PC between cycles
-    result = pc.quick_check()
+    result = pc.quick_check()              # first: tell Sam why
+    assert result.logged_off == []
+    assert platform.notices == [("Sam", "Your time for today is used up (30 of 30 minutes).\n"
+                                        "You will be signed out in 15 seconds.")]
+    assert journal(nas, "pc")[-1] == "login_refused"
+    assert 0 < pc.seconds_until_next_signout() <= 15
+    clock.mono += 10
+    assert pc.quick_check().logged_off == []   # still within the notice period
+    clock.mono += 6
+    result = pc.quick_check()              # then: sign out
     assert result.logged_off and "checked at login" in result.logged_off[0][1]
-    assert journal(nas, "pc")[-1] == "logged_off"
+    assert journal(nas, "pc")[-1] == "logged_off" and len(platform.notices) == 1
+
+
+def test_signing_out_before_the_deadline_cancels_it(tmp_path, nas):
+    pc, platform, clock = make(tmp_path, "pc", nas)
+    pc.run_cycle()
+    clock.now = clock.now.replace(hour=22)
+    platform.sessions = [sam()]
+    pc.quick_check()                       # told why
+    platform.sessions = []                 # Sam signs out by himself
+    pc.quick_check()
+    assert pc.seconds_until_next_signout() is None and platform.logged_off == []
+
+
+def test_full_cycle_also_tells_a_new_login_why(tmp_path, nas):
+    pc, platform, clock = make(tmp_path, "pc", nas)
+    laptop, _, laptop_clock = make(tmp_path, "laptop", nas, sam())
+    for _ in range(6):
+        laptop.run_cycle()
+        laptop_clock.advance(5)
+    platform.sessions = [sam()]            # Sam logs in on the PC right before its first cycle
+    result = pc.run_cycle()
+    assert result.logged_off == [] and result.credited == {} and platform.notices
 
 
 def test_quick_check_leaves_counted_sessions_to_the_full_cycle(tmp_path, nas):
@@ -129,5 +160,8 @@ def test_quick_check_outside_hours(tmp_path, nas):
     pc.run_cycle()
     clock.now = clock.now.replace(hour=22)
     platform.sessions = [sam()]
+    pc.quick_check()
+    assert "between 08:00 and 21:00" in platform.notices[0][1]
+    clock.mono += 16
     result = pc.quick_check()
     assert result.logged_off and "login hours" in result.logged_off[0][1]

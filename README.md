@@ -3,7 +3,42 @@
 Parental control for computer time: daily limits and allowed login hours per person, enforced
 on **Windows, Linux and macOS**, with one shared daily total across all computers and OSs.
 
-Current version: **2.1.0**. See [CHANGELOG.md](CHANGELOG.md).
+Current version: **2.2.0**. See [CHANGELOG.md](CHANGELOG.md).
+
+## Features
+
+- **One daily limit per child, across every computer and OS.** Minutes used on the desktop, the
+  laptop or the other OS of a multi-boot machine add up to one total.
+- **Allowed login hours and daily minutes**, for weekdays and weekends, with per-day exceptions.
+- **The same child under different account names** on different computers is recognised as one person.
+- **Configuration page:** one window to manage people, limits, the network store and installation
+  permissions, from any of the computers.
+- **Statistics:** for any day, the minutes per child on each computer, and one timeline of what
+  happened on all computers (sessions, locked screens, warnings, logoffs and why), exportable as CSV.
+- **The child is told why:** a sign-in that isn't allowed shows the reason before signing out.
+- **Works offline:** if the network store is unreachable, stricter offline limits apply and the
+  minutes are uploaded later.
+- **Your data stays at home:** usage is shared through your own WebDAV store (for example on a NAS),
+  over HTTPS with a password; nothing is sent anywhere else.
+
+### Screenshots
+
+**Configuration: people and their limits.** Here Sam has 90 minutes on weekdays between 08:00 and
+20:00, 150 minutes at weekends, and a longer Friday. *Other account names* link Sam's accounts on
+the other computers. Blank fields use the defaults.
+
+![Configurator, People tab](docs/images/configurator-people.png)
+
+**Statistics: the Activity tab.** Minutes per child on each computer, and the combined timeline of
+all computers.
+
+![Configurator, Activity tab](docs/images/configurator-activity.png)
+
+**What a child sees** when signing in after the daily time is used up (Windows):
+
+![Sign-in message](docs/images/sign-in-notice.png)
+
+*All screenshots use demo data.*
 
 ## How it works
 
@@ -14,8 +49,9 @@ service. Every few minutes the tracker:
 2. Maps each account to a **person** from the configuration. Accounts that don't belong to a person
    are ignored and not recorded.
 3. Logs the person off if the time is outside their allowed login hours. Between these checks,
-   new logins are checked every 20 seconds, so someone who logs in while already over the limit
-   or outside the hours is logged off at once.
+   new logins are checked every 20 seconds. Someone who signs in while already over the limit or
+   outside the hours sees a message saying why (for example "Your time for today is used up
+   (90 of 90 minutes)") and is signed out 15 seconds later.
 4. Adds the elapsed time to this installation's usage record for today. It writes locally first,
    then copies the record to the network store.
 5. Adds up the person's minutes from **all** installations and logs them off when the daily limit
@@ -191,7 +227,18 @@ run, from boot, as SYSTEM/root. You set this up yourself.
 
 #### Windows: scheduled task
 
-Create it in Task Scheduler (*Create Task…*, not *Create Basic Task*):
+**With the script** (in PowerShell as administrator; the script is in the install folder):
+
+```powershell
+cd "C:\Program Files\TimeManager"
+powershell -ExecutionPolicy Bypass -File .\create-scheduled-task.ps1           # create and start the task
+powershell -ExecutionPolicy Bypass -File .\create-scheduled-task.ps1 -Remove   # remove it again
+```
+
+It creates the task with exactly the settings below (and replaces an existing one of the same name).
+Options: `-TaskName`, `-TaskFolder` (e.g. `My`), `-TrackerPath`.
+
+**Or by hand** in Task Scheduler (*Create Task…*, not *Create Basic Task*):
 
 | Setting | Value | Why |
 |---|---|---|
@@ -264,7 +311,11 @@ Local data lives next to the program: `instance.toml`, `data/` (own records, cac
 
 ## Limitations
 
-- No warning before logoff yet. The OS adapters already have a place for it (`notify`).
+- The sign-in message is a message box on Windows, a desktop notification on Linux (GNOME, KDE; it
+  uses `notify-send` or `gdbus`) and a dialog on macOS. A fullscreen game may cover it; the sign-out
+  happens anyway.
+- No warning *before* the time runs out during a session yet; only a sign-in that is not allowed is
+  told why.
 - Logoff is forced, so unsaved work is lost.
 - An unlocked but idle session counts as usage.
 - Changes in the configurator always overwrite whole settings; there's no per-field merge with

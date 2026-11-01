@@ -1,6 +1,7 @@
 """Linux adapter: systemd-logind through loginctl. Only local graphical sessions are counted."""
 
 import pwd
+import shutil
 from pathlib import Path
 
 from platforms.base import Session, run
@@ -49,8 +50,25 @@ def log_off(session: Session) -> None:
     run(["loginctl", "terminate-session", str(session.session_id)])
 
 
-def notify(session: Session, message: str) -> None:
-    """Not implemented yet: warnings before logoff are a planned feature."""
+def notify(session: Session, title: str, message: str, seconds: int) -> None:
+    """Show a desktop notification in the user's session (GNOME, KDE, ...).
+
+    The tracker runs as root, so the notification is sent as the user, to the user's session D-Bus.
+    notify-send is used if installed, otherwise gdbus (part of GLib, present on GNOME and KDE).
+    """
+    user = pwd.getpwnam(session.account)
+    bus = f"unix:path=/run/user/{user.pw_uid}/bus"
+    as_user = ["runuser", "-u", session.account, "--", "env", f"DBUS_SESSION_BUS_ADDRESS={bus}"]
+    if shutil.which("notify-send"):
+        command = [*as_user, "notify-send", "--urgency=critical", "--app-name=Time Manager",
+                   f"--expire-time={seconds * 1000}", title, message]
+    else:
+        command = [*as_user, "gdbus", "call", "--session", "--dest", "org.freedesktop.Notifications",
+                   "--object-path", "/org/freedesktop/Notifications",
+                   "--method", "org.freedesktop.Notifications.Notify",
+                   "Time Manager", "0", "dialog-warning", title, message, "[]", "{'urgency': <byte 2>}",
+                   str(seconds * 1000)]
+    run(command, timeout=10)
 
 
 def list_local_accounts() -> list[str]:

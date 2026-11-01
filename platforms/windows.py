@@ -5,6 +5,7 @@ import logging
 import subprocess
 import winreg
 
+import win32con
 import win32ts
 import wmi
 
@@ -35,8 +36,10 @@ def log_off(session: Session) -> None:
     win32ts.WTSLogoffSession(_SERVER, session.session_id, False)
 
 
-def notify(session: Session, message: str) -> None:
-    """Not implemented yet: warnings before logoff are a planned feature."""
+def notify(session: Session, title: str, message: str, seconds: int) -> None:
+    """Show a message box in the user's session; it closes itself after `seconds`. Does not wait."""
+    style = win32con.MB_OK | win32con.MB_ICONINFORMATION | win32con.MB_SETFOREGROUND | win32con.MB_TOPMOST
+    win32ts.WTSSendMessage(_SERVER, session.session_id, title, message, style, seconds, False)
 
 
 def list_local_accounts() -> list[str]:

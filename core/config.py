@@ -220,6 +220,10 @@ def parse_config(data: bytes) -> dict:
     """Parse, normalise and validate limits.toml content. Raises ConfigError."""
     if len(data) > MAX_CONFIG_BYTES:
         raise ConfigError(f"config is larger than {MAX_CONFIG_BYTES} bytes")
+    if data.lstrip()[:1] == b"<":
+        raise ConfigError("the store returned a web page instead of the configuration file; the store URL "
+                          "probably points to a web interface, not to the WebDAV share (check the port and "
+                          "the share name on the Connection tab)")
     try:
         raw = tomllib.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:

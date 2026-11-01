@@ -25,6 +25,7 @@ EVENT_TEXT = {
     "session_background": "user switched away, not counted",
     "session_ended": "session ended",
     "near_limit": "close to the daily limit",
+    "login_refused": "sign-in not allowed, told why",
     "logged_off": "logged off",
     "offline": "network store unreachable, offline limits apply",
     "online": "network store reachable again",

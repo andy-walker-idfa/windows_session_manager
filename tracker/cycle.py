@@ -20,6 +20,9 @@ from shared.logging_setup import set_level
 from tracker.sync import Repository
 
 WRITER_INFO_EVERY = datetime.timedelta(hours=1)
+# A login that is not allowed is told why, then signed out after this many seconds.
+LOGIN_NOTICE_SECONDS = 15
+NOTICE_TITLE = "Time Manager"
 
 
 @dataclass
@@ -83,6 +86,55 @@ class Tracker:
         self._last_config: dict | None = None
         self._last_usage: dict[str, float] = {}
         self._last_date: datetime.date | None = None
+        # Refused logins that were told why and are signed out at their deadline (monotonic seconds).
+        self._pending: dict[str, dict] = {}
+
+    # ----- refused logins: tell the user why, then sign out --------------------------------
+    def _refusal(self, limits: dict, used: float, now_local) -> tuple[str, str, str] | None:
+        """(reason code, log text, message for the user) if this login is not allowed, else None."""
+        if outside_login_window(limits, now_local):
+            return ("login_hours",
+                    f"outside allowed login hours {limits['earliest_login']}-{limits['latest_login']}",
+                    f"Signing in is allowed between {limits['earliest_login']} and {limits['latest_login']}.")
+        if limit_reached(limits, used):
+            return ("daily_limit",
+                    f"daily limit of {limits['limit_minutes']} min reached ({used:.0f} min used today)",
+                    f"Your time for today is used up ({used:.0f} of {limits['limit_minutes']} minutes).")
+        return None
+
+    def _refuse_login(self, session, person: str, limits: dict, used: float, refusal, now_local,
+                      result: CycleResult) -> None:
+        """First time: show the reason and set a deadline. At the deadline: sign the user out."""
+        account = normalize_account(session.account)
+        code, reason, message = refusal
+        pending = self._pending.get(account)
+        if pending is None:
+            text = f"{message}\nYou will be signed out in {LOGIN_NOTICE_SECONDS} seconds."
+            if self.dry_run:
+                logging.info(f"[dry run] Would tell {session.account}: {text!r}")
+            else:
+                try:
+                    self.platform.notify(session, NOTICE_TITLE, text, LOGIN_NOTICE_SECONDS)
+                except Exception as e:
+                    logging.warning(f"Could not show the sign-out notice to {session.account}: {e}")
+            logging.info(f"{person} ({account}) signed in, but {reason}: notified, signing out in "
+                         f"{LOGIN_NOTICE_SECONDS} s.")
+            self.journal.add(now_local, "login_refused", person=person, account=account, reason=code,
+                             used=used, limit=limits["limit_minutes"])
+            self._pending[account] = {"deadline": self.monotonic() + LOGIN_NOTICE_SECONDS}
+            self._states[account] = (person, "refused")
+            return
+        if self.monotonic() >= pending["deadline"]:
+            if self._log_off(session, person, code, f"{reason} (checked at login)", result, now_local,
+                             used=used, limit=limits["limit_minutes"], detail="after notice"):
+                del self._pending[account]
+                self._states[account] = (person, "logged off")
+
+    def seconds_until_next_signout(self) -> float | None:
+        """Seconds until the earliest pending sign-out, so the main loop can wake up in time."""
+        if not self._pending:
+            return None
+        return max(0.0, min(p["deadline"] for p in self._pending.values()) - self.monotonic())
 
     # ----- helpers -------------------------------------------------------------------------
     def _limits(self, config, person, day, online) -> dict:
@@ -138,17 +190,19 @@ class Tracker:
             state = "locked" if session.locked else ("counted" if session.active else "background")
             if account in logged_off:
                 state = "logged off"
-            if states.get(account, (None, None))[1] not in ("counted", "logged off"):
+            elif account in self._pending:
+                state = "refused"  # told why and about to be signed out; already logged
+            if states.get(account, (None, None))[1] not in ("counted", "logged off", "refused"):
                 states[account] = (person, state)
 
         for account in sorted(set(states) | set(self._states)):
             person, state = states.get(account) or (self._states[account][0], "ended")
             previous = self._states.get(account, (None, None))[1]
-            if state == previous or state == "logged off":
-                continue  # unchanged, or the logoff line already says what happened
+            if state == previous or state in ("logged off", "refused"):
+                continue  # unchanged, or the logoff / refusal line already says what happened
             used, limit = numbers(person)
             if state == "ended":
-                if previous != "logged off":
+                if previous not in ("logged off", "refused"):
                     logging.info(f"{person} ({account}): session ended on this computer, {summary(person)}.")
                     self.journal.add(now_local, "session_ended", person=person, account=account, used=used, limit=limit)
             elif state == "counted":
@@ -215,6 +269,9 @@ class Tracker:
                           f"{', '.join(describe(s) for s in all_sessions) or 'none'}")
 
         usage_before = usage_by_person([own, *others], index)
+        present = {normalize_account(s.account) for s in sessions}
+        for account in [a for a in self._pending if a not in present]:
+            del self._pending[account]  # signed out (or locked) before the deadline
         managed = []
         for session in sessions:
             account = normalize_account(session.account)
@@ -222,6 +279,13 @@ class Tracker:
             if person is None:
                 continue  # not managed, not recorded
             limits = self._limits(config, person, today, online)
+            if self._states.get(account, (None, None))[1] != "counted":
+                # A new login: if it is not allowed, tell the user why before signing out.
+                refusal = self._refusal(limits, usage_before.get(person, 0.0), now_local)
+                if refusal:
+                    self._refuse_login(session, person, limits, usage_before.get(person, 0.0), refusal,
+                                       now_local, result)
+                    continue
             if outside_login_window(limits, now_local):
                 self._log_off(session, person, "login_hours", f"outside allowed login hours "
                               f"{limits['earliest_login']}-{limits['latest_login']}", result, now_local,
@@ -261,9 +325,10 @@ class Tracker:
 
     # ----- quick check between cycles ------------------------------------------------------
     def quick_check(self) -> CycleResult:
-        """Log off a managed user who just logged in while over the limit or outside the allowed
-        hours. Uses the limits and usage of the last full cycle; no network access. Sessions that
-        were already being counted are left to the full cycle."""
+        """Handle a managed user who just signed in while over the limit or outside the allowed
+        hours: tell them why, then sign them out LOGIN_NOTICE_SECONDS later. Uses the limits and
+        usage of the last full cycle; no network access. Sessions that were already being counted
+        are left to the full cycle."""
         now_local = self.clock()
         result = CycleResult(online=self._was_online is not False)
         if self._last_config is None:
@@ -271,26 +336,19 @@ class Tracker:
         today = now_local.date()
         usage = self._last_usage if self._last_date == today else {}  # a new day starts at 0
         index = build_account_index(self._last_config)
-        for session in self.platform.get_sessions():
-            if not session.active or session.locked:
-                continue
+        sessions = [s for s in self.platform.get_sessions() if s.active and not s.locked]
+        present = {normalize_account(s.account) for s in sessions}
+        for account in [a for a in self._pending if a not in present]:
+            del self._pending[account]  # signed out (or locked) before the deadline
+        for session in sessions:
             account = normalize_account(session.account)
             person = index.get(account)
             if person is None or self._states.get(account, (None, None))[1] == "counted":
                 continue
             limits = self._limits(self._last_config, person, today, result.online)
             used = usage.get(person, 0.0)
-            if outside_login_window(limits, now_local):
-                code, reason = "login_hours", (f"outside allowed login hours {limits['earliest_login']}-"
-                                               f"{limits['latest_login']} (checked at login)")
-            elif limit_reached(limits, used):
-                code, reason = "daily_limit", (f"daily limit of {limits['limit_minutes']} min reached "
-                                               f"({used:.0f} min used today, checked at login)")
-            else:
-                continue
-            if self._log_off(session, person, code, reason, result, now_local, used=used,
-                             limit=limits["limit_minutes"], detail="checked at login"):
-                self._states[account] = (person, "logged off")
-        if result.logged_off:
-            self.repo.push_dirty()
+            refusal = self._refusal(limits, used, now_local)
+            if refusal:
+                self._refuse_login(session, person, limits, used, refusal, now_local, result)
+        self.repo.push_dirty()  # refusals and sign-outs reach the shared activity log promptly
         return result

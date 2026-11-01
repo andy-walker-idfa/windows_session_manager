@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-10-30
+
+### Added
+
+- **The child is told why a sign-in is not allowed.** When someone signs in while their time for the
+  day is used up, or outside the allowed hours, a message explains why ("Your time for today is used
+  up (90 of 90 minutes)" or "Signing in is allowed between 08:00 and 20:00") and they are signed out
+  15 seconds later. Previously the sign-out came without explanation. Windows shows a message box,
+  Linux a desktop notification (GNOME, KDE), macOS a dialog. The shared activity log records
+  `login_refused` and then `logged_off`.
+- **`create-scheduled-task.ps1`** in the Windows build: creates the tracker's scheduled task with the
+  recommended settings in one step (or removes it with `-Remove`). Creating the task by hand, as
+  described in the README, remains possible.
+
+### Fixed
+
+- A store URL that reaches the NAS's web interface instead of the WebDAV share (typically a missing or
+  wrong port) is now explained: *Test connection* says the address answers without a password and is
+  not the WebDAV share, and loading the limits says a web page came back instead of the configuration
+  file, instead of a confusing TOML error.
+- After **Save connection**, a store whose limits can't be loaded no longer shows an error that looks
+  like the save failed. The settings are saved; one message says so and explains why the limits
+  weren't loaded.
+
 ## [2.1.0] - 2026-10-30
 
 ### Added

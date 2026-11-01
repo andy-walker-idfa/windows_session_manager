@@ -4,7 +4,7 @@ Every adapter module provides:
 
     get_sessions() -> list[Session]
     log_off(session: Session) -> None          # raises on failure
-    notify(session: Session, message: str) -> None
+    notify(session: Session, title: str, message: str, seconds: int) -> None   # does not wait
     list_local_accounts() -> list[str]
     machine_id() -> str                        # stable per OS installation, "" if unknown
 """

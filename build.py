@@ -20,8 +20,10 @@ from shared.defaults import __version__  # noqa: E402
 
 OS_NAME = {"win32": "windows", "darwin": "macos"}.get(sys.platform, "linux")
 DIST = ROOT / "dist" / OS_NAME / "TimeManager"
-# Service definition template for Linux / macOS (the Windows scheduled task is described in README.md).
-SERVICE_TEMPLATE = {"linux": "timemanager-tracker.service", "macos": "local.timemanager.tracker.plist"}.get(OS_NAME)
+# How the tracker is started automatically: a systemd unit (Linux), a LaunchDaemon (macOS), or a script
+# that creates the scheduled task (Windows; the task can also be created by hand, see README.md).
+SERVICE_TEMPLATE = {"linux": "timemanager-tracker.service", "macos": "local.timemanager.tracker.plist",
+                    "windows": "create-scheduled-task.ps1"}[OS_NAME]
 
 
 def check_tkinter() -> bool:
