@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Linux a desktop notification (GNOME, KDE), macOS a dialog. The shared activity log records
   `login_refused` and then `logged_off`.
 
+### Fixed
+
+- A store URL that reaches the NAS's web interface instead of the WebDAV share (typically a missing or
+  wrong port) is now explained: *Test connection* says the address answers without a password and is
+  not the WebDAV share, and loading the limits says a web page came back instead of the configuration
+  file, instead of a confusing TOML error.
+
 ## [2.1.0] - 2026-10-30
 
 ### Added

@@ -80,6 +80,11 @@ def check_webdav(url: str, username: str, password: str, ca_file: str = "", time
     def tls_and_auth_required():
         # Same certificate handling as the tracker uses, so the test predicts the real connection.
         r = make_session(ca_file).get(url.rstrip("/") + "/", timeout=timeout)
+        if r.status_code < 400:
+            raise ValueError(
+                f"this address answers without a password (HTTP {r.status_code}), so it is not the WebDAV "
+                f"share. It is probably the NAS's web interface or another web page: check the port (the "
+                f"WebDAV app's HTTPS port, e.g. :30036) and the share name at the end of the URL")
         if r.status_code != 401:
             raise ValueError(f"request without password returned HTTP {r.status_code}, expected 401")
         return "certificate verified, password required"

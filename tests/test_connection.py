@@ -229,3 +229,47 @@ def test_server_certificate_file_works_on_every_python_version(ca_signed_webdav)
         assert WebDavStore(url, "tracker", "secret", trusted, timeout=10).list("") == []
         assert all(ok for _, ok, _ in check_webdav(url, "tracker", "secret", trusted, timeout=10,
                                                    http_port=_free_port())), trusted
+
+
+@pytest.fixture
+def https_web_interface(tmp_path):
+    """An HTTPS server with a valid certificate that answers every path with a web page, like the
+    NAS's admin interface reached by a URL with the wrong port."""
+    openssl = shutil.which("openssl") or r"C:\Program Files\Git\usr\bin\openssl.exe"
+    try:
+        subprocess.run([openssl, "version"], capture_output=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        pytest.skip("openssl not available")
+    cert, key = tmp_path / "cert.pem", tmp_path / "key.pem"
+    subprocess.run([openssl, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
+                    "-keyout", str(key), "-out", str(cert), "-subj", "/CN=localhost",
+                    "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"], check=True, capture_output=True)
+    from cheroot import wsgi
+    from cheroot.ssl.builtin import BuiltinSSLAdapter
+
+    def app(environ, start_response):
+        start_response("200 OK", [("Content-Type", "text/html")])
+        return [b"<!DOCTYPE html><html><body>NAS login</body></html>"]
+
+    port = _free_port()
+    server = wsgi.Server(("127.0.0.1", port), app)
+    server.ssl_adapter = BuiltinSSLAdapter(str(cert), str(key))
+    threading.Thread(target=server.start, daemon=True).start()
+    while not server.ready:
+        pass
+    yield f"https://localhost:{port}/timemanager", str(cert)
+    server.stop()
+
+
+def test_wrong_service_is_explained(https_web_interface):
+    """Same certificate, wrong service (wrong port): the test says so, and loading the limits says
+    a web page came back instead of the configuration file."""
+    from core.config import ConfigError, parse_config
+    from storage.webdav import WebDavStore
+    url, cert = https_web_interface
+    results = {name: (ok, detail) for name, ok, detail in check_webdav(url, "tracker", "secret", cert, timeout=10)}
+    ok, detail = results["Certificate valid for this host name; anonymous access refused"]
+    assert not ok and "not the WebDAV share" in detail and "port" in detail
+    data = WebDavStore(url, "tracker", "secret", cert, timeout=10).get("config/limits.toml", 100_000)
+    with pytest.raises(ConfigError, match="web page instead of the configuration"):
+        parse_config(data)
