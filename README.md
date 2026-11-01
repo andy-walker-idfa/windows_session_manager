@@ -23,8 +23,9 @@ Current version: **2.2.0**. See [CHANGELOG.md](CHANGELOG.md).
 
 ### Screenshots
 
-**Configuration: people and their limits.** Blank fields use the defaults; *Other account names*
-link the child's accounts on other computers.
+**Configuration: people and their limits.** Here Sam has 90 minutes on weekdays between 08:00 and
+20:00, 150 minutes at weekends, and a longer Friday. *Other account names* link Sam's accounts on
+the other computers. Blank fields use the defaults.
 
 ![Configurator, People tab](docs/images/configurator-people.png)
 
