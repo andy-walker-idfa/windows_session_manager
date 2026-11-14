@@ -130,6 +130,31 @@ def test_outside_login_hours_tells_why_then_logs_off_without_credit(tmp_path, na
     assert len(platform.notices) == 1  # told once, not on every check
 
 
+def test_time_added_between_cycles_lets_the_next_login_in(tmp_path, nas):
+    """A parent adds time (a day override) after the limit was reached; the user signs in again
+    before the next full cycle. The quick login check must use the new limit, not the cached one."""
+    tracker, platform, clock = make(tmp_path, "pc", nas, sam())
+    for _ in range(6):
+        tracker.run_cycle()
+        clock.advance(5)
+    assert platform.logged_off  # 30 of 30 min
+    config = json.loads(json.dumps(CONFIG))
+    config["revision"] = 2
+    config["users"]["Sam"]["day_overrides"] = {"monday": {"limit_minutes": 60}}
+    nas.put(CONFIG_KEY, serialize_config(config))
+    platform.sessions = [sam(session_id=2)]
+    platform.logged_off = []
+    platform.notices = []
+    clock.mono += 30  # signs in again shortly, before the next full cycle
+    tracker.quick_check()
+    clock.mono += 16
+    tracker.quick_check()
+    assert not platform.logged_off and not platform.notices
+    assert tracker.seconds_until_next_signout() is None
+    result = tracker.run_cycle()
+    assert not result.logged_off and result.credited
+
+
 def test_offline_uses_cache_and_stricter_defaults_then_pushes(tmp_path, nas):
     config = json.loads(json.dumps(CONFIG))
     config["users"]["Sam"]["weekday"] = {"limit_minutes": 200, "latest_login": "23:00"}

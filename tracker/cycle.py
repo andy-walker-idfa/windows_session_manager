@@ -130,6 +130,13 @@ class Tracker:
                 del self._pending[account]
                 self._states[account] = (person, "logged off")
 
+    def _cancel_refusal(self, account: str, person: str) -> None:
+        """The limits changed during the notice period (e.g. time was added): keep the user signed in."""
+        if self._pending.pop(account, None) is not None:
+            logging.info(f"{person} ({account}): limits changed, sign-in allowed after all.")
+            if self._states.get(account, (None, None))[1] == "refused":
+                del self._states[account]
+
     def seconds_until_next_signout(self) -> float | None:
         """Seconds until the earliest pending sign-out, so the main loop can wake up in time."""
         if not self._pending:
@@ -286,6 +293,7 @@ class Tracker:
                     self._refuse_login(session, person, limits, usage_before.get(person, 0.0), refusal,
                                        now_local, result)
                     continue
+                self._cancel_refusal(account, person)
             if outside_login_window(limits, now_local):
                 self._log_off(session, person, "login_hours", f"outside allowed login hours "
                               f"{limits['earliest_login']}-{limits['latest_login']}", result, now_local,
@@ -326,9 +334,10 @@ class Tracker:
     # ----- quick check between cycles ------------------------------------------------------
     def quick_check(self) -> CycleResult:
         """Handle a managed user who just signed in while over the limit or outside the allowed
-        hours: tell them why, then sign them out LOGIN_NOTICE_SECONDS later. Uses the limits and
-        usage of the last full cycle; no network access. Sessions that were already being counted
-        are left to the full cycle."""
+        hours: tell them why, then sign them out LOGIN_NOTICE_SECONDS later. Uses the usage of the
+        last full cycle. Before refusing a new login it re-reads the shared config, so limits a parent
+        has just raised (e.g. a day override adding time) apply at once instead of at the next full
+        cycle. Sessions that were already being counted are left to the full cycle."""
         now_local = self.clock()
         result = CycleResult(online=self._was_online is not False)
         if self._last_config is None:
@@ -340,6 +349,7 @@ class Tracker:
         present = {normalize_account(s.account) for s in sessions}
         for account in [a for a in self._pending if a not in present]:
             del self._pending[account]  # signed out (or locked) before the deadline
+        refreshed = False
         for session in sessions:
             account = normalize_account(session.account)
             person = index.get(account)
@@ -348,7 +358,17 @@ class Tracker:
             limits = self._limits(self._last_config, person, today, result.online)
             used = usage.get(person, 0.0)
             refusal = self._refusal(limits, used, now_local)
+            if refusal and account not in self._pending and not refreshed:
+                # The cached config may predate a change made since the last full cycle.
+                self._last_config = self.repo.refresh_config()
+                refreshed = True
+                if person not in self._last_config.get("users", {}):
+                    continue  # no longer managed; the next full cycle sorts it out
+                limits = self._limits(self._last_config, person, today, result.online)
+                refusal = self._refusal(limits, used, now_local)
             if refusal:
                 self._refuse_login(session, person, limits, used, refusal, now_local, result)
+            else:
+                self._cancel_refusal(account, person)
         self.repo.push_dirty()  # refusals and sign-outs reach the shared activity log promptly
         return result

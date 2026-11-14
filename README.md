@@ -3,7 +3,7 @@
 Parental control for computer time: daily limits and allowed login hours per person, enforced
 on **Windows, Linux and macOS**, with one shared daily total across all computers and OSs.
 
-Current version: **2.2.0**. See [CHANGELOG.md](CHANGELOG.md).
+Current version: **2.2.1**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
