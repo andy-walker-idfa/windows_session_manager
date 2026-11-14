@@ -49,7 +49,7 @@ SRC="/media/$USER/SHARED/Scripts/Python/windows session time manager"    # adjus
 mkdir -p ~/timemanager-src
 cd "$SRC"
 cp -R build.py tracker.spec configurator.spec requirements.txt requirements-dev.txt pytest.ini README.md \
-      run_tracker.py run_configurator.py core platforms storage tracker configurator shared service tests tools \
+      run_tracker.py run_configurator.py core platforms storage tracker configurator shared service assets tests tools \
       ~/timemanager-src/
 cp nas-cert.crt ~/            # the certificate file, wherever you keep it
 
@@ -112,6 +112,16 @@ Close the window, then remove the root permission again: `xhost -si:localuser:ro
 The window follows the desktop's display scaling (read with `xrdb`). If it is still too small or
 too large, set the factor yourself: `sudo TM_UI_SCALE=2 /opt/timemanager/configurator/configurator`.
 
+**Menu launcher (optional).** To start the configurator from the GNOME or KDE application menu, for
+the desktop user who manages the limits (not with sudo):
+
+```sh
+cp /opt/timemanager/time-manager.desktop ~/.local/share/applications/
+```
+
+*Time Manager* then appears in the menu with its icon. It opens a terminal for the sudo password,
+allows root to open the window (`xhost`) and removes that permission again when the window closes.
+
 ## 7. Start the tracker as a service
 
 ```sh
@@ -162,7 +172,7 @@ loginctl show-session $(loginctl list-sessions --no-legend | awk 'NR==1{print $1
 ## Upgrading later
 
 ```sh
-cd ~/timemanager-src && cp -R "$SRC"/{core,platforms,storage,tracker,configurator,shared,tools,build.py,requirements.txt,requirements-dev.txt} .
+cd ~/timemanager-src && cp -R "$SRC"/{core,platforms,storage,tracker,configurator,shared,service,assets,tools,build.py,tracker.spec,configurator.spec,run_tracker.py,run_configurator.py,README.md,requirements.txt,requirements-dev.txt} .
 venv/bin/pip install -r requirements-dev.txt && venv/bin/python build.py
 sudo systemctl stop timemanager-tracker
 sudo cp -R ~/timemanager-src/dist/linux/TimeManager/. /opt/timemanager/ && sudo chown -R root:root /opt/timemanager

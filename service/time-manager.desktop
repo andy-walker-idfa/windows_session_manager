@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Time Manager
+Comment=Configure screen time limits
+Exec=sh -c "xhost +si:localuser:root >/dev/null; sudo /opt/timemanager/configurator/configurator; xhost -si:localuser:root >/dev/null"
+Terminal=true
+Icon=/opt/timemanager/configurator/icon.png
+Categories=Utility;

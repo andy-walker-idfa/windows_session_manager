@@ -55,6 +55,10 @@ def main() -> int:
     shutil.copy2(ROOT / "README.md", DIST / "README.md")
     if SERVICE_TEMPLATE:
         shutil.copy2(ROOT / "service" / SERVICE_TEMPLATE, DIST / SERVICE_TEMPLATE)
+    if OS_NAME == "linux":
+        # GNOME / KDE launcher: install with  cp /opt/timemanager/time-manager.desktop ~/.local/share/applications/
+        shutil.copy2(ROOT / "assets" / "icon.png", DIST / "configurator" / "icon.png")
+        shutil.copy2(ROOT / "service" / "time-manager.desktop", DIST / "time-manager.desktop")
     archive = shutil.make_archive(str(ROOT / "dist" / f"TimeManager-{__version__}-{OS_NAME}"), "zip",
                                   root_dir=DIST.parent, base_dir=DIST.name)
     print(f"\nBuilt into {DIST}\nRelease zip: {archive}")

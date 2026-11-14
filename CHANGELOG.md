@@ -5,6 +5,15 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Linux menu launcher with an icon.** The Linux build includes `time-manager.desktop` and the
+  configurator icon. Copied to `~/.local/share/applications/`, it adds *Time Manager* to the GNOME or
+  KDE application menu; it asks for the sudo password in a terminal and handles the root window
+  permission on Wayland.
+
 ## [2.2.1] - 2026-11-14
 
 ### Fixed
