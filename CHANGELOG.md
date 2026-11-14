@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-11-14
+
+### Fixed
+
+- **Time added by a parent applies to the next sign-in right away.** When a user's time was used up
+  and a parent then raised the limit (for example a day override adding 30 minutes), a sign-in within
+  the next few minutes could still be refused with the old limit: the quick sign-in check, which runs
+  every 20 seconds between the full 5-minute cycles, judged the login against the configuration loaded
+  by the last full cycle. The tracker now re-reads the shared configuration before refusing a sign-in.
+  If the limits change during the 15-second notice, the pending sign-out is cancelled and the user
+  stays signed in.
+
 ## [2.2.0] - 2026-10-30
 
 ### Added
