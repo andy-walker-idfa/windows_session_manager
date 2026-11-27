@@ -3,11 +3,15 @@
 Step by step, for a systemd distribution with a graphical desktop (GNOME, KDE, …). Commands are
 run in a terminal as your normal (admin) user; `sudo` is used where root is needed.
 
+There is no ready-made Linux download: you build the program from the source on GitHub
+(step 3), which takes a few minutes. This guide assumes the network store (a WebDAV share, see
+*Setup guide → 1. Network store* in the [README](../README.md)) already exists.
+
 Placeholders used below:
-- `SRC`: the project folder on the shared exFAT partition, as Linux sees it. Find it with
-  `lsblk -f` or in the file manager, e.g. `/media/$USER/SHARED/Scripts/Python/windows session time manager`.
 - The NAS: `https://nas.home.arpa:30036/timemanager`, with the certificate file
-  `nas-cert.crt`.
+  `nas-cert.crt`. These are examples: use your own URL and file name throughout.
+- `v2.2.2`: the release to install. Use the newest one listed on the
+  [Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases).
 
 ## 1. System packages
 
@@ -15,9 +19,11 @@ Python must be **3.11 or newer**. Check with `python3 --version`.
 
 | Distribution | Command |
 |---|---|
-| Ubuntu / Debian / Mint | `sudo apt install python3 python3-venv python3-tk binutils x11-xserver-utils` |
-| Fedora | `sudo dnf install python3 python3-tkinter binutils xrdb xhost` |
-| Arch / Manjaro | `sudo pacman -S python tk binutils xorg-xrdb xorg-xhost` |
+| Ubuntu / Debian / Mint | `sudo apt install git python3 python3-venv python3-tk binutils x11-xserver-utils` |
+| Fedora | `sudo dnf install git python3 python3-tkinter binutils xrdb xhost` |
+| Arch / Manjaro | `sudo pacman -S git python tk binutils xorg-xrdb xorg-xhost` |
+
+`git` is only needed to download the source with `git clone` (step 3, option A).
 
 Ubuntu 22.04 ships Python 3.10: there, run `sudo apt install python3.11 python3.11-venv python3.11-tk`
 and use `python3.11` instead of `python3` below.
@@ -39,19 +45,44 @@ echo "192.168.1.10   nas.home.arpa" | sudo tee -a /etc/hosts
 getent hosts nas.home.arpa
 ```
 
-## 3. Copy the source and build
+## 3. Get the source and build
 
-Build in your home folder: a Python virtual environment cannot live on exFAT (no symbolic links),
-and exFAT may be mounted so that programs cannot run from it.
+The source goes into `~/timemanager-src` in your home folder. Get it in one of these ways.
+
+**A. With git (recommended, makes upgrading easy):**
 
 ```sh
-SRC="/media/$USER/SHARED/Scripts/Python/windows session time manager"    # adjust
+git clone --branch v2.2.2 https://github.com/andy-walker-idfa/windows_session_manager.git ~/timemanager-src
+```
+
+**B. Without git**, as the source archive of a release (the *Source code (tar.gz)* link on the
+[Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases)):
+
+```sh
+mkdir -p ~/timemanager-src
+curl -L https://github.com/andy-walker-idfa/windows_session_manager/archive/refs/tags/v2.2.2.tar.gz \
+  | tar -xz --strip-components=1 -C ~/timemanager-src
+```
+
+**C. From a copy you already have**, for example on a partition shared with Windows on a
+multi-boot computer. Copy it to your home folder first: a Python virtual environment cannot live on
+exFAT or NTFS (no symbolic links), and such partitions are often mounted so that programs cannot
+run from them.
+
+```sh
+SRC="/media/$USER/SHARED/Scripts/Python/windows session time manager"    # adjust; see lsblk -f
 mkdir -p ~/timemanager-src
 cd "$SRC"
 cp -R build.py tracker.spec configurator.spec requirements.txt requirements-dev.txt pytest.ini README.md \
       run_tracker.py run_configurator.py core platforms storage tracker configurator shared service assets tests tools \
       ~/timemanager-src/
-cp nas-cert.crt ~/            # the certificate file, wherever you keep it
+```
+
+Whichever way you chose, copy the NAS certificate file to your home folder (the configurator asks
+for it in step 6), then build:
+
+```sh
+cp /path/to/nas-cert.crt ~/            # the certificate file, wherever you keep it
 
 cd ~/timemanager-src
 python3 -m venv venv
@@ -62,6 +93,14 @@ venv/bin/python build.py
 ```
 
 The result is `~/timemanager-src/dist/linux/TimeManager/` and `dist/TimeManager-<version>-linux.zip`.
+
+**Ready-made build instead (optional).** From 2.2.2, the release also carries
+`TimeManager-<version>-linux.zip` under *Assets*. It was built on Debian 13 and runs only on
+distributions with glibc 2.41 or newer (check with `ldd --version`); on older ones, build it as
+above. To use it, unzip it and copy the `TimeManager` folder in step 5 instead of
+`~/timemanager-src/dist/linux/TimeManager`. Python is bundled: of step 1, you only need the
+`xhost`/`xrdb` package (`x11-xserver-utils`, `xrdb xhost` or `xorg-xrdb xorg-xhost`). Step 4 needs the
+source, so skip it.
 
 ## 4. Check the store from Linux (optional, before installing)
 
@@ -112,7 +151,7 @@ Close the window, then remove the root permission again: `xhost -si:localuser:ro
 The window follows the desktop's display scaling (read with `xrdb`). If it is still too small or
 too large, set the factor yourself: `sudo TM_UI_SCALE=2 /opt/timemanager/configurator/configurator`.
 
-**Menu launcher (optional).** To start the configurator from the GNOME or KDE application menu, for
+**Menu launcher (optional, versions after 2.2.1).** To start the configurator from the GNOME or KDE application menu, for
 the desktop user who manages the limits (not with sudo):
 
 ```sh
@@ -140,7 +179,7 @@ Expected log, as on Windows:
 ... DEBUG - Cycle: online, 5.00 min to credit; sessions: <you> (active, not managed)
 ```
 
-If no sessions are listed, show what logind reports and send it to me:
+If no sessions are listed, show what logind reports and include it when you report the problem:
 
 ```sh
 loginctl list-sessions
@@ -171,12 +210,38 @@ loginctl show-session $(loginctl list-sessions --no-legend | awk 'NR==1{print $1
 
 ## Upgrading later
 
+First get the new source (use the new release tag), the same way as in step 3:
+
 ```sh
-cd ~/timemanager-src && cp -R "$SRC"/{core,platforms,storage,tracker,configurator,shared,service,assets,tools,build.py,tracker.spec,configurator.spec,run_tracker.py,run_configurator.py,README.md,requirements.txt,requirements-dev.txt} .
+cd ~/timemanager-src
+TAG=v2.2.3                                                   # the new release tag
+git fetch --tags && git checkout "$TAG"                     # A. with git
+# B. without git: download the new archive over the old files
+# curl -L https://github.com/andy-walker-idfa/windows_session_manager/archive/refs/tags/$TAG.tar.gz | tar -xz --strip-components=1 -C ~/timemanager-src
+# C. from your own copy: repeat the cp -R command of step 3
+```
+
+Then build and replace the installed program:
+
+```sh
+cd ~/timemanager-src
 venv/bin/pip install -r requirements-dev.txt && venv/bin/python build.py
 sudo systemctl stop timemanager-tracker
 sudo cp -R ~/timemanager-src/dist/linux/TimeManager/. /opt/timemanager/ && sudo chown -R root:root /opt/timemanager
 sudo systemctl start timemanager-tracker
 ```
 
-If something fails, send the step number, the command output and `sudo tail -30 /opt/timemanager/logs/tracker.log`.
+Settings (`instance.toml`), data and logs in `/opt/timemanager` are kept.
+
+## Removing
+
+```sh
+sudo systemctl disable --now timemanager-tracker
+sudo rm /etc/systemd/system/timemanager-tracker.service
+sudo systemctl daemon-reload
+sudo rm -rf /opt/timemanager
+```
+
+If something fails, open an [issue on GitHub](https://github.com/andy-walker-idfa/windows_session_manager/issues)
+with the step number, the command output and `sudo tail -30 /opt/timemanager/logs/tracker.log`
+(remove anything private, such as your NAS address, first).

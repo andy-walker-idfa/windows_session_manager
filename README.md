@@ -3,7 +3,7 @@
 Parental control for computer time: daily limits and allowed login hours per person, enforced
 on **Windows, Linux and macOS**, with one shared daily total across all computers and OSs.
 
-Current version: **2.2.1**. See [CHANGELOG.md](CHANGELOG.md).
+Current version: **2.2.2**. See [CHANGELOG.md](CHANGELOG.md).
 
 ## Features
 
@@ -160,15 +160,21 @@ Step-by-step guides, including testing: [another Windows computer](docs/install-
 There is no installer. Each OS has its own build, a `TimeManager` folder containing `tracker` (the
 service) and `configurator` (the GUI). Get it in either of two ways:
 
-- **Release zip:** `TimeManager-<version>-<windows|linux|macos>.zip`.
+- **Release zip** (Windows): on the [Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases), open the newest
+  release and download `TimeManager-<version>-windows.zip` under *Assets*. Releases have no Linux or
+  macOS zip yet: build those yourself, as below.
 - **Build it yourself** from the source, so you know exactly what runs as SYSTEM/root. PyInstaller
-  can't build for another OS, so build on each OS with Python 3.11 or newer:
+  can't build for another OS, so build on each OS with Python 3.11 or newer. Take the source of a
+  release, either with git or as the *Source code* archive on the Releases page:
   ```sh
-  python -m venv venv
+  git clone --branch v2.2.2 https://github.com/andy-walker-idfa/windows_session_manager.git      # use the newest release tag
+  cd windows_session_manager
+  python3 -m venv venv                                  # Windows: py -m venv venv
   venv/bin/pip install -r requirements-dev.txt          # Windows: venv\Scripts\pip ...
   venv/bin/python build.py                               # Windows: venv\Scripts\python build.py
   ```
-  The result is `dist/<os>/TimeManager/`, plus the same folder as a zip in `dist/`.
+  The result is `dist/<os>/TimeManager/`, plus the same folder as a zip in `dist/`. The Linux and
+  macOS guides above walk through this step by step, including the system packages it needs.
 
 On Windows, a downloaded unsigned program triggers SmartScreen ("Windows protected your PC").
 Choose *More info → Run anyway*, or build it yourself.

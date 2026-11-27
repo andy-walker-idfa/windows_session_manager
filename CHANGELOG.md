@@ -7,12 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.2] - 2026-11-27
+
 ### Added
 
 - **Linux menu launcher with an icon.** The Linux build includes `time-manager.desktop` and the
   configurator icon. Copied to `~/.local/share/applications/`, it adds *Time Manager* to the GNOME or
   KDE application menu; it asks for the sudo password in a terminal and handles the root window
   permission on Wayland.
+- **Linux zip on the release page**, built on Debian 13, for distributions with glibc 2.41 or newer.
+
+### Changed
+
+- **Install guides start from GitHub.** The Linux and macOS guides get the source with `git clone`
+  or as a release archive, instead of from a copy on a shared partition, and have a *Removing*
+  section. The Windows guide downloads the zip from the Releases page.
 
 ## [2.2.1] - 2026-11-14
 

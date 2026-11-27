@@ -2,8 +2,8 @@
 
 Step by step, for an additional Windows 10/11 computer (for example a laptop) that joins an existing
 Time Manager setup: the network store is already running and the limits are already configured
-from another computer. The new computer needs **no Python**: you copy the program built on the
-first computer.
+from another computer. The new computer needs **no Python**: you use the ready-made Windows zip
+from GitHub, or one you built yourself.
 
 Placeholders used below:
 - The NAS: `https://nas.home.arpa:30036/timemanager` and its certificate file `nas-cert.crt` are
@@ -33,8 +33,16 @@ Run commands in **PowerShell as administrator** (right-click Start → *Terminal
 
 ## 2. Bring the program over
 
-On the first computer, `build.py` produced `dist\TimeManager-<version>-windows.zip`. Copy it to this
-computer (USB stick or network share).
+Get the Windows zip, `TimeManager-<version>-windows.zip`, in one of two ways:
+
+- **Download it:** open the [Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases), pick the newest release and, under
+  *Assets*, download `TimeManager-<version>-windows.zip`. (Not *Source code*: that is the source,
+  which needs Python to build.)
+- **Build it yourself** from the source, so you know exactly what runs as SYSTEM: see
+  *Setup guide → 3. Get the program* in the [README](../README.md). `build.py` produces
+  `dist\TimeManager-<version>-windows.zip`; copy it to this computer (USB stick or network share).
+
+Then:
 
 1. If the zip came by browser, e-mail or cloud storage: right-click it → *Properties* → tick
    **Unblock** → *OK*. Otherwise Windows marks every file as downloaded and SmartScreen asks on start.
@@ -140,7 +148,7 @@ other computers' minutes on the NAS.
 
 ## Upgrading later
 
-Build the new version on the first computer, then here: end the task (Task Scheduler → right-click
+Download (or build) the new zip as in step 2, extract it, then here: end the task (Task Scheduler → right-click
 → *End*), copy the new `tracker` and `configurator` folders over the ones in
 `C:\Program Files\TimeManager`, and run the task again. Settings, data and logs are kept.
 
@@ -148,5 +156,5 @@ Build the new version on the first computer, then here: end the task (Task Sched
 
 Delete the scheduled task, then the folder `C:\Program Files\TimeManager`.
 
-If something fails, send the step number and the last 30 lines of
-`C:\Program Files\TimeManager\logs\tracker.log`.
+If something fails, open an [issue on GitHub](https://github.com/andy-walker-idfa/windows_session_manager/issues) with the step number and the last
+30 lines of `C:\Program Files\TimeManager\logs\tracker.log`.

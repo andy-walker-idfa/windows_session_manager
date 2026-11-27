@@ -3,9 +3,13 @@
 Step by step, for macOS 13 (Ventura) or newer, including a Hackintosh; written for macOS 15 (Sequoia). Commands are run in
 Terminal as your normal admin user; `sudo` is used where root is needed.
 
+There is no ready-made macOS download: you build the program from the source on GitHub (step 3),
+which takes a few minutes. This guide assumes the network store (a WebDAV share, see
+*Setup guide → 1. Network store* in the [README](../README.md)) already exists.
+
 Placeholders used below:
-- `SRC`: the project folder on the shared exFAT partition, as macOS sees it, e.g.
-  `/Volumes/SHARED/Scripts/Python/windows session time manager` (check with `ls /Volumes`).
+- `v2.2.2`: the release to install. Use the newest one listed on the
+  [Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases).
 - The NAS: `https://nas.home.arpa:30036/timemanager` and its certificate file `nas-cert.crt` are
   examples: use your own URL and file name throughout.
 
@@ -56,20 +60,45 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 dscacheutil -q host -a name nas.home.arpa
 ```
 
-## 3. Copy the source and build
+## 3. Get the source and build
 
-Build in your home folder: a Python virtual environment cannot live on exFAT (no symbolic links).
+The source goes into `~/timemanager-src` in your home folder. Get it in one of these ways.
+
+**A. With git (recommended, makes upgrading easy).** `git` comes with Apple's Command Line Tools;
+if macOS offers to install them on the first `git` command, accept and run the command again.
 
 ```sh
-SRC="/Volumes/SHARED/Scripts/Python/windows session time manager"    # adjust
-PY=/usr/local/bin/python3.13       # the Python you chose in step 1
-"$PY" --version || echo "PY is wrong: set it to the Python from step 1"
+git clone --branch v2.2.2 https://github.com/andy-walker-idfa/windows_session_manager.git ~/timemanager-src
+```
+
+**B. Without git**, as the source archive of a release (the *Source code (tar.gz)* link on the
+[Releases page](https://github.com/andy-walker-idfa/windows_session_manager/releases)):
+
+```sh
+mkdir -p ~/timemanager-src
+curl -L https://github.com/andy-walker-idfa/windows_session_manager/archive/refs/tags/v2.2.2.tar.gz \
+  | tar -xz --strip-components=1 -C ~/timemanager-src
+```
+
+**C. From a copy you already have**, for example on a partition shared with another OS. Copy it to
+your home folder first: a Python virtual environment cannot live on exFAT (no symbolic links).
+
+```sh
+SRC="/Volumes/SHARED/Scripts/Python/windows session time manager"    # adjust; see ls /Volumes
 mkdir -p ~/timemanager-src
 cd "$SRC"
 cp -R build.py tracker.spec configurator.spec requirements.txt requirements-dev.txt pytest.ini README.md \
       run_tracker.py run_configurator.py core platforms storage tracker configurator shared service tests tools docs \
       ~/timemanager-src/
-cp nas-cert.crt ~/            # the certificate file, wherever you keep it
+```
+
+Whichever way you chose, copy the NAS certificate file to your home folder (the configurator asks
+for it in step 6), then build:
+
+```sh
+PY=/usr/local/bin/python3.13       # the Python you chose in step 1
+"$PY" --version || echo "PY is wrong: set it to the Python from step 1"
+cp /path/to/nas-cert.crt ~/        # the certificate file, wherever you keep it
 
 cd ~/timemanager-src
 "$PY" -m venv venv
@@ -156,7 +185,7 @@ Expected log, as on the other systems:
 ```
 
 The tracker reads sessions from the IORegistry. If sessions are missing or wrongly shown as locked,
-send me the output of this command (once normally, once with the screen locked and then unlocked
+include the output of this command in your report (once normally, once with the screen locked and then unlocked
 with another user's session open):
 
 ```sh
@@ -176,7 +205,7 @@ ioreg -n Root -d1 -a | plutil -p - | grep -E "kCGSSessionUserNameKey|kCGSSession
    including the minutes from the other systems, then `Logged off tmtest: daily limit … reached`.
 5. Lock screen: with a higher limit, log in as `tmtest` and lock the screen (Ctrl+Cmd+Q). The cycle
    line shows `tmtest (locked, person tmtest)` and the minutes do not grow. If it shows `active`
-   instead, send me the `ioreg` output from step 7 taken while locked.
+   instead, include the `ioreg` output from step 7 taken while locked.
 
 ## 9. Offline and reboot
 
@@ -187,9 +216,21 @@ ioreg -n Root -d1 -a | plutil -p - | grep -E "kCGSSessionUserNameKey|kCGSSession
 
 ## Upgrading later
 
+First get the new source (use the new release tag), the same way as in step 3:
+
 ```sh
 cd ~/timemanager-src
-cp -R "$SRC"/{core,platforms,storage,tracker,configurator,shared,tools,docs,build.py,requirements.txt,requirements-dev.txt} .
+TAG=v2.2.3                                                   # the new release tag
+git fetch --tags && git checkout "$TAG"                     # A. with git
+# B. without git: download the new archive over the old files
+# curl -L https://github.com/andy-walker-idfa/windows_session_manager/archive/refs/tags/$TAG.tar.gz | tar -xz --strip-components=1 -C ~/timemanager-src
+# C. from your own copy: repeat the cp -R command of step 3
+```
+
+Then build and replace the installed program:
+
+```sh
+cd ~/timemanager-src
 venv/bin/pip install -r requirements-dev.txt && venv/bin/python build.py
 sudo launchctl bootout system /Library/LaunchDaemons/local.timemanager.tracker.plist
 sudo cp -R dist/macos/TimeManager/. /usr/local/timemanager/ && sudo chown -R root:wheel /usr/local/timemanager
@@ -204,5 +245,6 @@ sudo rm /Library/LaunchDaemons/local.timemanager.tracker.plist
 sudo rm -rf /usr/local/timemanager
 ```
 
-If something fails, send the step number, the command output and
-`sudo tail -30 /usr/local/timemanager/logs/tracker.log`.
+If something fails, open an [issue on GitHub](https://github.com/andy-walker-idfa/windows_session_manager/issues)
+with the step number, the command output and `sudo tail -30 /usr/local/timemanager/logs/tracker.log`
+(remove anything private, such as your NAS address, first).
