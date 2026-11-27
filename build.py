@@ -43,6 +43,16 @@ def check_tkinter() -> bool:
         return False
 
 
+def copy_data_file(src: Path, dst: Path) -> None:
+    """Copy a non-program file with mode 644, whatever the source's mode.
+
+    A source on exFAT/NTFS shows every file as executable (rwxr-xr-x); copying those bits into
+    the build made systemd warn at boot that the unit file "is marked executable".
+    """
+    shutil.copyfile(src, dst)
+    dst.chmod(0o644)
+
+
 def main() -> int:
     if not check_tkinter():
         return 1
@@ -52,13 +62,13 @@ def main() -> int:
                                 cwd=ROOT)
         if result.returncode != 0:
             return result.returncode
-    shutil.copy2(ROOT / "README.md", DIST / "README.md")
+    copy_data_file(ROOT / "README.md", DIST / "README.md")
     if SERVICE_TEMPLATE:
-        shutil.copy2(ROOT / "service" / SERVICE_TEMPLATE, DIST / SERVICE_TEMPLATE)
+        copy_data_file(ROOT / "service" / SERVICE_TEMPLATE, DIST / SERVICE_TEMPLATE)
     if OS_NAME == "linux":
-        # GNOME / KDE launcher: install with  cp /opt/timemanager/time-manager.desktop ~/.local/share/applications/
-        shutil.copy2(ROOT / "assets" / "icon.png", DIST / "configurator" / "icon.png")
-        shutil.copy2(ROOT / "service" / "time-manager.desktop", DIST / "time-manager.desktop")
+        # GNOME / KDE launcher: install with  install -m 644 /opt/timemanager/time-manager.desktop ~/.local/share/applications/
+        copy_data_file(ROOT / "assets" / "icon.png", DIST / "configurator" / "icon.png")
+        copy_data_file(ROOT / "service" / "time-manager.desktop", DIST / "time-manager.desktop")
     archive = shutil.make_archive(str(ROOT / "dist" / f"TimeManager-{__version__}-{OS_NAME}"), "zip",
                                   root_dir=DIST.parent, base_dir=DIST.name)
     print(f"\nBuilt into {DIST}\nRelease zip: {archive}")

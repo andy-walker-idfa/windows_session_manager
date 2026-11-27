@@ -155,7 +155,7 @@ too large, set the factor yourself: `sudo TM_UI_SCALE=2 /opt/timemanager/configu
 the desktop user who manages the limits (not with sudo):
 
 ```sh
-cp /opt/timemanager/time-manager.desktop ~/.local/share/applications/
+install -m 644 /opt/timemanager/time-manager.desktop ~/.local/share/applications/
 ```
 
 *Time Manager* then appears in the menu with its icon. It opens a terminal for the sudo password,
@@ -164,11 +164,22 @@ allows root to open the window (`xhost`) and removes that permission again when 
 ## 7. Start the tracker as a service
 
 ```sh
-sudo cp /opt/timemanager/timemanager-tracker.service /etc/systemd/system/
+sudo install -m 644 /opt/timemanager/timemanager-tracker.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now timemanager-tracker
 systemctl status timemanager-tracker          # should say "active (running)"
 sudo tail -f /opt/timemanager/logs/tracker.log
+```
+
+`install -m 644` copies the file with the permissions systemd expects. If you used `cp` and the
+source came from an exFAT or NTFS partition, the file is marked executable, and systemd warns at
+every boot: *Configuration file /etc/systemd/system/timemanager-tracker.service is marked
+executable. Please remove executable permission bits.* The service still works; to remove the
+warning, run:
+
+```sh
+sudo chmod 644 /etc/systemd/system/timemanager-tracker.service
+sudo systemctl daemon-reload
 ```
 
 Expected log, as on Windows:

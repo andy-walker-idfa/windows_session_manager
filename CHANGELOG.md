@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **No more "marked executable" warning from systemd at boot.** When the source was on an exFAT or
+  NTFS partition, every file there appears executable, and the build copied that onto
+  `timemanager-tracker.service`, `time-manager.desktop`, the README and the icon. The build now
+  writes them with mode 644, and the Linux guide installs the unit file with `install -m 644`.
+
 ## [2.2.2] - 2026-11-27
 
 ### Added

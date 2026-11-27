@@ -265,7 +265,7 @@ in 1.x would start overlapping instances. After upgrading from 1.x, delete the o
 The template `timemanager-tracker.service` is in the build folder (and in `service/` in the source):
 
 ```sh
-sudo cp /opt/timemanager/timemanager-tracker.service /etc/systemd/system/
+sudo install -m 644 /opt/timemanager/timemanager-tracker.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now timemanager-tracker
 systemctl status timemanager-tracker
